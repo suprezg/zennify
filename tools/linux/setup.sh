@@ -4,49 +4,57 @@
 
 set -e
 
-echo "Setting up Zennify..."
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+PROJECT_ROOT=$(readlink -f "$SCRIPT_DIR/../..")
+DATA_DIR="$PROJECT_ROOT/data"
+
+echo "Setting up Zennify at $PROJECT_ROOT..."
+mkdir -p "$DATA_DIR"
 
 read -p "Enter your name: " USER_NAME
 
-echo "Creating virtual environment..."
-if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
+echo "Creating virtual environment in $DATA_DIR..."
+if [ ! -d "$DATA_DIR/.venv" ]; then
+    python3 -m venv "$DATA_DIR/.venv"
 fi
-source .venv/bin/activate
-VENV_PATH=$(pwd)/.venv
-echo "Virtual Environment Created at $(pwd)"
+source "$DATA_DIR/.venv/bin/activate"
+VENV_PATH="$DATA_DIR/.venv"
+echo "Virtual Environment Created at $VENV_PATH"
 
 echo "Installing dependencies..."
-if [ -f "tools/requirements.txt" ]; then
+REQUIREMENTS_FILE="$PROJECT_ROOT/tools/requirements.txt"
+if [ -f "$REQUIREMENTS_FILE" ]; then
     pip install --upgrade pip
-    pip install -r tools/requirements.txt
+    pip install -r "$REQUIREMENTS_FILE"
 else
-    echo "Warning: tools/requirements.txt not found."
+    echo "Warning: $REQUIREMENTS_FILE not found."
 fi
 
 echo "Initializing database..."
-python3 -c "
+PYTHONPATH="$PROJECT_ROOT" python3 -c "
 from core.shared.storage import StorageManager
-storage = StorageManager()
+import os
+storage = StorageManager(db_path='$DATA_DIR/zennify_storage.db')
 storage.close()
 "
-DB_PATH=$(pwd)/zennify_storage.db
-echo "Database Initialized at $(pwd)"
+DB_PATH="$DATA_DIR/zennify_storage.db"
+echo "Database Initialized at $DB_PATH"
 
-echo "Generating structured config.json..."
+echo "Generating structured config.json in $DATA_DIR..."
 python3 -c "
 import json, os
 config = {
     \"system_config\": {
         \"user_name\": \"$USER_NAME\",
         \"venv_path\": \"$VENV_PATH\",
-        \"database_path\": \"$DB_PATH\"
+        \"database_path\": \"$DB_PATH\",
+        \"project_root\": \"$PROJECT_ROOT\"
     },
     \"activity_config\": {
         \"service_path\": os.path.expanduser(\"~/.config/systemd/user/zennify-activity.service\"),
         \"service_status\": False,
         \"popup_interval_timer\": \"30m\",
-        \"popup_visible_timer\": \"1m\",
+        \"popup_visible_timer\": \"2m\",
         \"streak\": 0,
         \"multiplier\": 1.0
     },
@@ -65,14 +73,16 @@ config = {
     \"pomodoro_config\": {},
     \"shop_config\": {}
 }
-with open('config.json', 'w') as f:
+with open('$DATA_DIR/config.json', 'w') as f:
     json.dump(config, f, indent=4)
 "
-echo "Config File Generated at $(pwd)"
+echo "Config File Generated at $DATA_DIR/config.json"
 
 
 echo "Generating systemd user services..."
 mkdir -p ~/.config/systemd/user/
+
+ZENNIFY_SH="$PROJECT_ROOT/tools/linux/zennify.sh"
 
 cat <<EOF > ~/.config/systemd/user/zennify-activity.service
 [Unit]
@@ -80,7 +90,7 @@ Description=Zennify Activity Tracking Service
 After=network.target
 
 [Service]
-ExecStart=$(pwd)/tools/linux/zennify.sh --activity-popup
+ExecStart=$ZENNIFY_SH --activity-popup
 Restart=always
 
 [Install]
@@ -93,7 +103,7 @@ Description=Zennify Todo Service
 After=network.target
 
 [Service]
-ExecStart=$(pwd)/tools/linux/zennify.sh --todos
+ExecStart=$ZENNIFY_SH --todos
 Restart=always
 
 [Install]
@@ -103,4 +113,4 @@ EOF
 systemctl --user daemon-reload
 echo "Systemd services generated at ~/.config/systemd/user/"
 
-echo "Setup complete. Use tools/linux/zennify.sh to run the application."
+echo "Setup complete. Use $ZENNIFY_SH to run the application."
