@@ -52,6 +52,7 @@ config = {
     },
     \"activity_config\": {
         \"service_path\": os.path.expanduser(\"~/.config/systemd/user/zennify-activity.service\"),
+        \"timer_path\": os.path.expanduser(\"~/.config/systemd/user/zennify-activity.timer\"),
         \"service_status\": False,
         \"popup_interval_timer\": \"30m\",
         \"popup_visible_timer\": \"2m\",
@@ -87,14 +88,23 @@ ZENNIFY_SH="$PROJECT_ROOT/tools/linux/zennify.sh"
 cat <<EOF > ~/.config/systemd/user/zennify-activity.service
 [Unit]
 Description=Zennify Activity Tracking Service
-After=network.target
 
 [Service]
+Type=oneshot
 ExecStart=$ZENNIFY_SH --activity-popup
-Restart=always
+EOF
+
+cat <<EOF > ~/.config/systemd/user/zennify-activity.timer
+[Unit]
+Description=Zennify Activity Tracking Timer
+
+[Timer]
+OnActiveSec=30m
+OnUnitActiveSec=30m
+Persistent=false
 
 [Install]
-WantedBy=default.target
+WantedBy=timers.target
 EOF
 
 cat <<EOF > ~/.config/systemd/user/zennify-todo.service

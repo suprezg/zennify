@@ -162,8 +162,8 @@ class ActivityDashboard:
         Gives: str (color) or None
         """
         if frequency == 0: return None
-        if frequency < 3: return ft.Colors.BLUE_100
-        if frequency < 5: return ft.Colors.BLUE_300
+        if frequency < 3: return ft.Colors.BLUE_200
+        if frequency < 5: return ft.Colors.BLUE_400
         if frequency < 7: return ft.Colors.BLUE_600
         return ft.Colors.BLUE_900
 
@@ -266,7 +266,7 @@ class ActivityDashboard:
                 pie_chart = ft.Container(content=ft.Text("No data", color=ft.Colors.GREY_500), alignment=ft.Alignment.CENTER, expand=True)
 
             radar_data = data.get("radar_data", [])
-            if radar_data:
+            if len(radar_data) >= 3:
                 radar_chart = fch.RadarChart(
                     expand=True,
                     titles=[fch.RadarChartTitle(text=item[0]) for item in radar_data],
@@ -286,7 +286,14 @@ class ActivityDashboard:
                     ],
                 )
             else:
-                radar_chart = ft.Container(content=ft.Text("No data", color=ft.Colors.GREY_500), alignment=ft.Alignment.CENTER, expand=True)
+                if 0 < len(radar_data) < 3:
+                    dialog = ft.AlertDialog(
+                        title=ft.Text("Insufficient Data"),
+                        content=ft.Text("Radar chart requires at least 3 unique activities to render."),
+                        actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
+                    )
+                    self.page.show_dialog(dialog)
+                radar_chart = ft.Container(content=ft.Text("Not enough data", color=ft.Colors.GREY_500), alignment=ft.Alignment.CENTER, expand=True)
 
             bar_data = data.get("bar_data", [])
             if bar_data:

@@ -112,37 +112,99 @@ class ActivitySettings:
             with open(self.config_path, "w") as f:
                 json.dump(config, f, indent=4)
 
+    def _generate_systemd_files(self):
+        """
+        Regenerates the systemd service and timer files based on current config.
+
+        Takes: None
+        Gives: None
+        """
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "r") as f:
+                config = json.load(f)
+            
+            activity_config = config.get("activity_config", {})
+            system_config = config.get("system_config", {})
+            
+            project_root = system_config.get("project_root")
+            zennify_sh = os.path.join(project_root, "tools/linux/zennify.sh")
+            interval = activity_config.get("popup_interval_timer", "30m")
+            
+            service_path = activity_config.get("service_path")
+            timer_path = activity_config.get("timer_path")
+            
+            if service_path:
+                service_content = f"""[Unit]
+Description=Zennify Activity Tracking Service
+
+[Service]
+Type=oneshot
+ExecStart={zennify_sh} --activity-popup
+"""
+                with open(service_path, "w") as f:
+                    f.write(service_content)
+            
+            if timer_path:
+                timer_content = f"""[Unit]
+Description=Zennify Activity Tracking Timer
+
+[Timer]
+OnActiveSec={interval}
+OnUnitActiveSec={interval}
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+"""
+                with open(timer_path, "w") as f:
+                    f.write(timer_content)
+            
+            try:
+                subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+            except subprocess.CalledProcessError:
+                pass
+
     def toggle_service(self, enable):
         """
-        Enables or disables the background systemd service.
+        Enables or disables the background systemd timer.
 
         Takes: enable (bool)
         Gives: None
         """
         state = "enable" if enable else "disable"
+        action = "start" if enable else "stop"
         try:
-            subprocess.run(["systemctl", "--user", state, "--now", "zennify-activity.service"], check=True)
+            subprocess.run(["systemctl", "--user", state, "--now", "zennify-activity.timer"], check=True)
             self._update_config("service_status", enable)
         except subprocess.CalledProcessError:
             pass
 
     def change_popup_interval_timer(self, new_interval):
         """
-        Updates the popup interval timer in config.json.
+        Updates the popup interval timer and regenerates systemd files.
 
         Takes: new_interval (str)
         Gives: None
         """
         self._update_config("popup_interval_timer", new_interval)
+        self._generate_systemd_files()
+        
+        config = self.read_config()
+        if config.get("service_status"):
+            try:
+                subprocess.run(["systemctl", "--user", "restart", "zennify-activity.timer"], check=True)
+            except subprocess.CalledProcessError:
+                pass
 
     def change_popup_visible_timer(self, new_timer):
         """
-        Updates the popup visible timer in config.json.
+        Updates the popup visible timer and regenerates systemd files.
 
         Takes: new_timer (str)
         Gives: None
         """
         self._update_config("popup_visible_timer", new_timer)
+        self._generate_systemd_files()
 
     def update_streak_data(self, streak, multiplier):
         """
