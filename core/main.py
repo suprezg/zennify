@@ -11,6 +11,9 @@ def main(page: ft.Page):
     """
     Main entry point for the Flet application.
     Parses CLI arguments to route to the appropriate module.
+
+    Takes: page (ft.Page)
+    Gives: None
     """
     args = sys.argv[1:]
     
@@ -39,12 +42,12 @@ def main(page: ft.Page):
         from core.shop.dashboard import ShopDashboard
         ShopDashboard(page).view()
     elif mode == "--reset":
-        # TBD
+        pass
     elif mode == "--bankrupt":
-        # TBD
+        pass
     else:
         page.add(ft.Text(f"Unknown mode: {mode}"))
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.run(main)

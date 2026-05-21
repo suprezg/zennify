@@ -33,8 +33,14 @@ class StorageManager:
     def _get_db_path_from_config(self):
         """
         Reads the database path from config.json.
+
+        Takes: None
+        Gives: str (path to database)
         """
-        config_path = os.path.join(os.getcwd(), "config.json")
+        config_path = os.getenv("ZENNIFY_CONFIG_PATH")
+        if not config_path:
+            config_path = os.path.join(os.getcwd(), "config.json")
+            
         if os.path.exists(config_path):
             with open(config_path, "r") as f:
                 config = json.load(f)
