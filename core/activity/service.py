@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 from core.shared.storage import StorageManager
+from core.shared.configurator import ConfigManager
 
 
 class ActivityStorage:
@@ -69,48 +70,17 @@ class ActivityStorage:
 
 class ActivitySettings:
     """
-    Manages configuration settings for the activity module.
+    Manages configuration settings for the activity module using ConfigManager.
     """
 
     def __init__(self):
         """
-        Initializes the config file path using ZENNIFY_CONFIG_PATH.
+        Initializes the settings service with ConfigManager.
 
         Takes: None
         Gives: None
         """
-        self.config_path = os.getenv("ZENNIFY_CONFIG_PATH")
-        if not self.config_path:
-            self.config_path = os.path.join(os.getcwd(), "config.json")
-
-    def read_config(self):
-        """
-        Reads the activity configuration from config.json.
-
-        Takes: None
-        Gives: dict containing activity_config
-        """
-        if os.path.exists(self.config_path):
-            with open(self.config_path, "r") as f:
-                config = json.load(f)
-                return config.get("activity_config", {})
-        return {}
-
-    def _update_config(self, key, value):
-        """
-        Helper to update a specific key in activity_config within config.json.
-
-        Takes: key (str), value (any)
-        Gives: None
-        """
-        if os.path.exists(self.config_path):
-            with open(self.config_path, "r") as f:
-                config = json.load(f)
-
-            config["activity_config"][key] = value
-
-            with open(self.config_path, "w") as f:
-                json.dump(config, f, indent=4)
+        self.config_manager = ConfigManager()
 
     def _generate_systemd_files(self):
         """
@@ -119,19 +89,13 @@ class ActivitySettings:
         Takes: None
         Gives: None
         """
-        if os.path.exists(self.config_path):
-            with open(self.config_path, "r") as f:
-                config = json.load(f)
-            
-            activity_config = config.get("activity_config", {})
-            system_config = config.get("system_config", {})
-            
-            project_root = system_config.get("project_root")
+        project_root = self.config_manager.read_value("system", "project_root")
+        interval = self.config_manager.read_value("activity", "popup_interval_timer") or "30m"
+        service_path = self.config_manager.read_value("activity", "service_path")
+        timer_path = self.config_manager.read_value("activity", "timer_path")
+        
+        if project_root:
             zennify_sh = os.path.join(project_root, "tools/linux/zennify.sh")
-            interval = activity_config.get("popup_interval_timer", "30m")
-            
-            service_path = activity_config.get("service_path")
-            timer_path = activity_config.get("timer_path")
             
             if service_path:
                 service_content = f"""[Unit]
@@ -175,7 +139,7 @@ WantedBy=timers.target
         action = "start" if enable else "stop"
         try:
             subprocess.run(["systemctl", "--user", state, "--now", "zennify-activity.timer"], check=True)
-            self._update_config("service_status", enable)
+            self.config_manager.update_value("activity", "service_status", enable)
         except subprocess.CalledProcessError:
             pass
 
@@ -186,11 +150,10 @@ WantedBy=timers.target
         Takes: new_interval (str)
         Gives: None
         """
-        self._update_config("popup_interval_timer", new_interval)
+        self.config_manager.update_value("activity", "popup_interval_timer", new_interval)
         self._generate_systemd_files()
         
-        config = self.read_config()
-        if config.get("service_status"):
+        if self.config_manager.read_value("activity", "service_status"):
             try:
                 subprocess.run(["systemctl", "--user", "restart", "zennify-activity.timer"], check=True)
             except subprocess.CalledProcessError:
@@ -203,7 +166,7 @@ WantedBy=timers.target
         Takes: new_timer (str)
         Gives: None
         """
-        self._update_config("popup_visible_timer", new_timer)
+        self.config_manager.update_value("activity", "popup_visible_timer", new_timer)
         self._generate_systemd_files()
 
     def update_streak_data(self, streak, multiplier):
@@ -213,15 +176,8 @@ WantedBy=timers.target
         Takes: streak (int), multiplier (float)
         Gives: None
         """
-        if os.path.exists(self.config_path):
-            with open(self.config_path, "r") as f:
-                config = json.load(f)
-
-            config["activity_config"]["streak"] = streak
-            config["activity_config"]["multiplier"] = multiplier
-
-            with open(self.config_path, "w") as f:
-                json.dump(config, f, indent=4)
+        self.config_manager.update_value("activity", "streak", streak)
+        self.config_manager.update_value("activity", "multiplier", multiplier)
 
 
 class ActivityStatistics:

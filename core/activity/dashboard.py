@@ -7,6 +7,7 @@ import datetime
 import flet as ft
 import flet_charts as fch
 from core.activity.service import ActivitySettings, ActivityStatistics, ActivityReview
+from core.shared.configurator import ConfigManager
 
 
 class ActivityDashboard:
@@ -23,6 +24,7 @@ class ActivityDashboard:
         """
         self.page = page
         self.settings_service = ActivitySettings()
+        self.config_manager = ConfigManager()
         self.stats_service = ActivityStatistics()
         self.review_service = ActivityReview()
 
@@ -211,9 +213,8 @@ class ActivityDashboard:
         Takes: None
         Gives: ft.Column
         """
-        config = self.settings_service.read_config()
-        streak = config.get("streak", 0)
-        multiplier = config.get("multiplier", 1.0)
+        streak = self.config_manager.read_value("activity", "streak") or 0
+        multiplier = self.config_manager.read_value("activity", "multiplier") or 1.0
 
         metrics_row = ft.Row(
             [
@@ -362,7 +363,9 @@ class ActivityDashboard:
         Takes: None
         Gives: ft.Container
         """
-        config = self.settings_service.read_config()
+        service_status = self.config_manager.read_value("activity", "service_status") or False
+        popup_interval = self.config_manager.read_value("activity", "popup_interval_timer") or "30m"
+        popup_visible = self.config_manager.read_value("activity", "popup_visible_timer") or "1m"
 
         def update_service(e):
             self.settings_service.toggle_service(e.control.value)
@@ -380,7 +383,7 @@ class ActivityDashboard:
                         content=ft.Row(
                             [
                                 ft.Text("Background Service", size=18),
-                                ft.Switch(value=config.get("service_status", False), on_change=update_service)
+                                ft.Switch(value=service_status, on_change=update_service)
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                         ),
@@ -392,7 +395,7 @@ class ActivityDashboard:
                                 ft.Text("Popup Interval", size=18),
                                 ft.Dropdown(
                                     options=[ft.dropdown.Option(o) for o in ["30m", "1h", "2h", "3h"]],
-                                    value=config.get("popup_interval_timer", "30m"),
+                                    value=popup_interval,
                                     width=200,
                                     on_select=update_interval
                                 )
@@ -407,7 +410,7 @@ class ActivityDashboard:
                                 ft.Text("Minimum Visible Time", size=18),
                                 ft.Dropdown(
                                     options=[ft.dropdown.Option(o) for o in ["2m", "5m", "10m", "15m"]],
-                                    value=config.get("popup_visible_timer", "1m"),
+                                    value=popup_visible,
                                     width=200,
                                     on_select=update_visible
                                 )

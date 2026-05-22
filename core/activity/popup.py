@@ -7,6 +7,7 @@ import datetime
 import asyncio
 import flet as ft
 from core.activity.service import ActivitySettings, ActivityStorage
+from core.shared.configurator import ConfigManager
 
 
 class ActivityPopup:
@@ -23,11 +24,13 @@ class ActivityPopup:
         """
         self.page = page
         self.settings_service = ActivitySettings()
+        self.config_manager = ConfigManager()
         self.storage_service = ActivityStorage()
         
-        self.config = self.settings_service.read_config()
-        self.interval_seconds = self._parse_timer(self.config.get("popup_interval_timer", "30m"))
-        self.visible_seconds = self._parse_timer(self.config.get("popup_visible_timer", "1m"))
+        interval_timer = self.config_manager.read_value("activity", "popup_interval_timer") or "30m"
+        visible_timer = self.config_manager.read_value("activity", "popup_visible_timer") or "1m"
+        self.interval_seconds = self._parse_timer(interval_timer)
+        self.visible_seconds = self._parse_timer(visible_timer)
         
         self.current_time = datetime.datetime.now()
         self.start_time = self.current_time - datetime.timedelta(seconds=self.interval_seconds)
@@ -138,8 +141,8 @@ class ActivityPopup:
             tag = self.new_tag_input.value or self.tag_dropdown.value or "None"
             is_productive = self.productivity_radio.value == "productive"
 
-        streak = self.config.get("streak", 0)
-        multiplier = self.config.get("multiplier", 1.0)
+        streak = self.config_manager.read_value("activity", "streak") or 0
+        multiplier = self.config_manager.read_value("activity", "multiplier") or 1.0
         
         if is_productive:
             last_entry = self.storage_service.get_last_entry()
