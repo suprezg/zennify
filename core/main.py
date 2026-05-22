@@ -30,8 +30,8 @@ def main(page: ft.Page):
         from core.activity.popup import ActivityPopup
         ActivityPopup(page).view()
     elif mode == "--flashcards":
-        from core.flashcards.dashboard import FlashcardsDashboard
-        FlashcardsDashboard(page).view()
+        from core.flashcards.dashboard import FlashcardDashboard
+        FlashcardDashboard(page).view()
     elif mode == "--todos":
         from core.todos.dashboard import TodoDashboard
         TodoDashboard(page).view()

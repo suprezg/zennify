@@ -1,3 +1,4 @@
 flet
 flet-charts
 pytest
+fsrs
