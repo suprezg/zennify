@@ -66,11 +66,11 @@ class StorageManager:
             card_id TEXT PRIMARY KEY,
             content_hash TEXT,
             deck_name TEXT,
-            repetitions INTEGER,
-            ease_factor REAL,
+            stability REAL,
+            difficulty REAL,
+            state INTEGER,
             next_review TEXT,
-            last_review TEXT,
-            retribution INTEGER
+            last_review TEXT
         );
         CREATE TABLE IF NOT EXISTS todo (
             task_id INTEGER PRIMARY KEY AUTOINCREMENT,
