@@ -5,10 +5,15 @@ Purpose: User interface for the Flashcards feature with centered layout and list
 
 import os
 import flet as ft
-import flet_charts as fch
 import datetime
+import io
+import base64
+import matplotlib
+import matplotlib.pyplot as plt
 from core.flashcards.service import FlashcardRevision, FlashcardSettings, FlashcardStorage, FlashcardStatistics
 from core.shared.configurator import ConfigManager
+
+matplotlib.use("agg")
 
 
 class FlashcardDashboard:
@@ -110,73 +115,145 @@ class FlashcardDashboard:
             spacing=50
         )
 
-        # 2. Middle Row Metrics
-        mid_metrics = ft.Row([
-            ft.Column([ft.Text("Active Knowledge", size=12, color=ft.Colors.GREY_400), ft.Text(f"{g_stats['active_knowledge']}%", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_ACCENT)], horizontal_alignment="center"),
-            ft.Column([ft.Text("Success Rate", size=12, color=ft.Colors.GREY_400), ft.Text(f"{d_stats['success_rate']}%", size=24, weight=ft.FontWeight.BOLD)], horizontal_alignment="center"),
-            ft.Column([ft.Text("Efficiency", size=12, color=ft.Colors.GREY_400), ft.Text(f"{d_stats['efficiency']} d/rev", size=24, weight=ft.FontWeight.BOLD)], horizontal_alignment="center"),
-        ], alignment=ft.MainAxisAlignment.CENTER, spacing=100)
+        # 2. Charts Preparation logic
+        bg_color = "#111418"
+        plt.rcParams.update({
+            "text.color": "white",
+            "axes.labelcolor": "white",
+            "xtick.color": "white",
+            "ytick.color": "white",
+            "axes.edgecolor": "white",
+        })
 
-        # 3. Charts Preparation
-        
-        # Ease Factor Distribution (Bar)
-        diff_groups = [
-            fch.BarChartGroup(x=i, rods=[fch.BarChartRod(from_y=0, to_y=count, color=ft.Colors.BLUE_400, width=40)])
-            for i, (_, count) in enumerate(g_stats["difficulty_dist"])
-        ]
-        diff_labels = [fch.ChartAxisLabel(value=i, label=ft.Text(label, size=10)) for i, (label, _) in enumerate(g_stats["difficulty_dist"])]
-        diff_chart = fch.BarChart(
-            groups=diff_groups, bottom_axis=fch.ChartAxis(labels=diff_labels, label_size=30),
-            expand=True, interactive=True
-        )
+        def fig_to_base64(fig):
+            buf = io.BytesIO()
+            fig.tight_layout(pad=1.5)
+            fig.savefig(buf, format="png", bbox_inches="tight", facecolor=bg_color, dpi=100)
+            plt.close(fig)
+            return base64.b64encode(buf.getvalue()).decode("utf-8")
 
-        # Memory Stability (Bar)
-        stab_groups = [
-            fch.BarChartGroup(x=i, rods=[fch.BarChartRod(from_y=0, to_y=count, color=ft.Colors.CYAN_400, width=40)])
-            for i, (_, count) in enumerate(d_stats["stability"])
-        ]
-        stab_labels = [fch.ChartAxisLabel(value=i, label=ft.Text(label, size=10)) for i, (label, _) in enumerate(d_stats["stability"])]
-        stab_chart = fch.BarChart(groups=stab_groups, bottom_axis=fch.ChartAxis(labels=stab_labels, label_size=30), expand=True)
+        # 1. Ease Factor Distribution (Bar)
+        fig1, ax1 = plt.subplots(figsize=(7, 4))
+        ax1.set_facecolor(bg_color)
+        labels, counts = zip(*g_stats["difficulty_dist"])
+        ax1.bar(labels, counts, color="#42A5F5")
+        chart1_base64 = fig_to_base64(fig1)
+        mode_diff = max(g_stats["difficulty_dist"], key=lambda x: x[1])
 
-        # Review Forecast (Line) - Increased X labels
-        forecast_points = [fch.LineChartDataPoint(i, count) for i, (_, count) in enumerate(g_stats["forecast"])]
-        forecast_chart = fch.LineChart(
-            data_series=[fch.LineChartData(points=forecast_points, color=ft.Colors.AMBER, stroke_width=3, curved=True)],
-            expand=True, interactive=True,
-            bottom_axis=fch.ChartAxis(labels=[fch.ChartAxisLabel(value=i, label=ft.Text(g_stats["forecast"][i][0][-5:], size=10)) for i in range(0, 30, 2)], label_size=30)
-        )
+        # 2. Memory Stability (Bar)
+        fig2, ax2 = plt.subplots(figsize=(7, 4))
+        ax2.set_facecolor(bg_color)
+        s_labels, s_counts = zip(*d_stats["stability"])
+        ax2.bar(s_labels, s_counts, color="#26C6DA")
+        chart2_base64 = fig_to_base64(fig2)
+        mature_count = next((c for l, c in d_stats["stability"] if l == "Mature"), 0)
+
+        # 3. 30-Day Forecast (Line)
+        fig3, ax3 = plt.subplots(figsize=(7, 4))
+        ax3.set_facecolor(bg_color)
+        f_dates, f_counts = zip(*g_stats["forecast"])
+        f_short_dates = [d[-5:] for d in f_dates]
+        ax3.plot(f_short_dates, f_counts, color="#FFCA28", marker="o", linewidth=2)
+        for i, t in enumerate(ax3.get_xticklabels()):
+            if i % 5 != 0: t.set_visible(False)
+        chart3_base64 = fig_to_base64(fig3)
+        next_rev_count = g_stats["forecast"][0][1]
+
+        # 4. Card Freshness (Pie)
+        fig4, ax4 = plt.subplots(figsize=(7, 4))
+        ax4.set_facecolor(bg_color)
+        p_labels, p_counts = zip(*d_stats["freshness"])
+        p_data = [(l, c) for l, c in zip(p_labels, p_counts) if c > 0]
+        if p_data:
+            p_labels, p_counts = zip(*p_data)
+            ax4.pie(p_counts, labels=p_labels, autopct='%1.1f%%', colors=["#66BB6A", "#FFA726", "#EF5350"], textprops={'color':"w"})
+        else:
+            ax4.text(0.5, 0.5, "No Data", ha='center', va='center', color="white")
+        chart4_base64 = fig_to_base64(fig4)
+        review_count = next((c for l, c in d_stats["freshness"] if l == "Review"), 0)
+        total_d_cards = sum(p_counts)
+        rev_pc = round((review_count / total_d_cards * 100), 1) if total_d_cards > 0 else 0
+
+        # Helper for Chart/Metric Rows
+        def row_builder(title, visual_content, explanation, insight):
+            return ft.Row([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text(title, size=16, weight=ft.FontWeight.BOLD),
+                        visual_content
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    expand=3, border=ft.Border.all(2, ft.Colors.WHITE), border_radius=10, padding=10
+                ),
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("About this Metric", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200),
+                        ft.Text(explanation, size=14, color=ft.Colors.GREY_300),
+                        ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                        ft.Text(insight, size=15, weight=ft.FontWeight.W_500, color=ft.Colors.AMBER_ACCENT)
+                    ], spacing=10),
+                    expand=2, padding=30, alignment=ft.Alignment.TOP_LEFT
+                )
+            ], vertical_alignment=ft.CrossAxisAlignment.START, spacing=20)
 
         # 4. Layout
         return ft.Column([
             ft.Container(content=metrics_row, padding=20),
-            ft.Container(content=mid_metrics, padding=10),
             ft.Divider(height=1, color=ft.Colors.GREY_800),
-            # Row 1: Ease Factor & Stability
-            ft.Row([
-                ft.Container(
-                    content=ft.Column([
-                        ft.Text("Ease Factor Distribution", weight=ft.FontWeight.BOLD),
-                        ft.Container(content=diff_chart)
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                    expand=True, height=300, border=ft.Border.all(2, ft.Colors.WHITE), border_radius=10, margin=5
-                ),
-                ft.Container(
-                    content=ft.Column([
-                        ft.Text("Memory Stability (Strength)", weight=ft.FontWeight.BOLD),
-                        ft.Container(content=stab_chart)
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                    expand=True, height=300, border=ft.Border.all(2, ft.Colors.WHITE), border_radius=10, margin=5
-                ),
-            ]),
-            # Row 2: Line Chart
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("30-Day Review Forecast", weight=ft.FontWeight.BOLD),
-                    ft.Container(content=forecast_chart)
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                expand=True, height=350, border=ft.Border.all(2, ft.Colors.WHITE), border_radius=10, margin=5
-                )
-            ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=20)
+            
+            # Metric Rows
+            row_builder(
+                "Active Knowledge",
+                ft.Container(content=ft.Text(f"{g_stats['active_knowledge']}%", size=60, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_ACCENT), height=300, alignment=ft.Alignment.CENTER),
+                "Active Knowledge represents the total volume of information you are expected to remember right now. It is calculated by summing the retrievability (probability of recall) across all cards in your collection. Unlike total card count, this weights cards by how 'fresh' they are in your mind.",
+                f"You are currently effectively retaining {g_stats['active_knowledge']}% of your entire knowledge base."
+            ),
+            
+            row_builder(
+                "Success Rate",
+                ft.Container(content=ft.Text(f"{d_stats['success_rate']}%", size=60, weight=ft.FontWeight.BOLD, color=ft.Colors.CYAN_ACCENT), height=300, alignment=ft.Alignment.CENTER),
+                "Success Rate estimate predicts how likely you are to correctly answer a card if it were shown right now. This is a real-time estimation of your recall performance across your entire active deck based on the FSRS decay model.",
+                f"Based on your memory stability, you are likely to recall {d_stats['success_rate']}% of your active cards."
+            ),
+            
+            row_builder(
+                "Retention Rate",
+                ft.Container(content=ft.Text(f"{d_stats['retention_rate']}%", size=60, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_ACCENT), height=300, alignment=ft.Alignment.CENTER),
+                "Retention Rate is the average retrievability of all cards that have been learned. FSRS uses this to optimize your study schedule. A high retention rate means you remember things well but might be over-studying; a low rate means you're forgetting too much.",
+                f"Your average memory strength for learned material is currently at {d_stats['retention_rate']}%."
+            ),
+            
+            ft.Divider(height=40, color=ft.Colors.TRANSPARENT),
+            
+            # Chart Rows
+            row_builder(
+                "Ease Factor Distribution", 
+                ft.Image(src=chart1_base64, height=300, fit=ft.BoxFit.CONTAIN),
+                "The Ease Factor determines how quickly review intervals grow. This distribution shows the difficulty profile of your cards. Higher ease means concepts are mastered, while lower ease indicates material requiring more frequent repetition.",
+                f"Your most common difficulty level is '{mode_diff[0]}' with {mode_diff[1]} cards."
+            ),
+            
+            row_builder(
+                "Memory Stability (Strength)",
+                ft.Image(src=chart2_base64, height=300, fit=ft.BoxFit.CONTAIN),
+                "Memory Stability represents the time it will take for your retention to drop to 90%. Cards are categorized into maturity buckets: New, Learning, Review, and Mature. Higher stability means stronger long-term memory consolidation.",
+                f"You have {mature_count} mature cards established in your long-term memory."
+            ),
+            
+            row_builder(
+                "30-Day Review Forecast",
+                ft.Image(src=chart3_base64, height=300, fit=ft.BoxFit.CONTAIN),
+                "The Forecast predicts your future workload by calculating when cards will become due. This helps you plan your study sessions and prepare for potential spikes in your review schedule over the next 30 days.",
+                f"You have {next_rev_count} cards scheduled for your next review session."
+            ),
+            
+            row_builder(
+                "Card Status Distribution",
+                ft.Image(src=chart4_base64, height=300, fit=ft.BoxFit.CONTAIN),
+                "This chart provides a snapshot of your progress. 'New' cards are unexplored, 'Learning' cards are being acquired, and 'Review' cards are established. A healthy learning cycle moves cards steadily toward the Review phase.",
+                f"Currently, {rev_pc}% of your deck has successfully reached the long-term Review phase."
+            )
+            
+            ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=40)
 
     def _revision_tab(self):
         """

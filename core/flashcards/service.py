@@ -99,11 +99,36 @@ class FlashcardStatistics:
         streak = self.config_manager.read_value("activity", "streak") or 0
         multiplier = self.config_manager.read_value("activity", "multiplier") or 1.0
         
+        now = datetime.datetime.now(datetime.timezone.utc)
         total_cards = len(all_cards)
-        # state 0 is New in FSRS
-        revised_cards = [c for c in all_cards if c[2] != 1]
+        
+        # FSRS State 0 is New. Revised cards are Learning (1), Review (2), Relearning (3).
+        revised_cards = [c for c in all_cards if c[2] != 0]
         revised_count = len(revised_cards)
-        active_knowledge_pc = (revised_count / total_cards * 100) if total_cards > 0 else 0
+        
+        # Calculate Retrievability (R = 0.9^(t/S)) and Active Knowledge (Sum of R)
+        total_retrievability = 0
+        sum_r_all = 0
+        for c in all_cards:
+            stability, difficulty, state, _, last_review_str, _ = c
+            if state == 0:
+                continue
+                
+            try:
+                lr = datetime.datetime.fromisoformat(last_review_str)
+                if lr.tzinfo is None: lr = lr.replace(tzinfo=datetime.timezone.utc)
+                t = max(0, (now - lr).days)
+                # Formula: R = 0.9^(t/S)
+                r = (0.9 ** (t / stability)) if stability > 0 else 0
+                total_retrievability += r
+                sum_r_all += r
+            except (ValueError, TypeError, ZeroDivisionError):
+                continue
+
+        # Active Knowledge % = (Sum of Retrievability / Total Cards) * 100
+        active_knowledge_pc = (sum_r_all / total_cards * 100) if total_cards > 0 else 0
+        # Retention Rate (Deck) = Average Retrievability of learned cards
+        avg_retention = (total_retrievability / revised_count * 100) if revised_count > 0 else 0
         
         # Difficulty Distribution Histogram
         diff_dist = {"Very Easy": 0, "Easy": 0, "Medium": 0, "Hard": 0, "Very Hard": 0}
@@ -116,7 +141,6 @@ class FlashcardStatistics:
             else: diff_dist["Very Hard"] += 1
 
         # Review Forecast (Next 30 days)
-        now = datetime.datetime.now(datetime.timezone.utc)
         forecast = {}
         for i in range(30):
             day = (now + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
@@ -135,14 +159,12 @@ class FlashcardStatistics:
 
         # Deck Specific Metrics
         deck_cards = all_cards if deck_name == "ALL" else [c for c in all_cards if c[5] == deck_name]
-        d_count = len(deck_cards)
         
         # Freshness Ratio (Using State)
         freshness = {"New": 0, "Learning": 0, "Review": 0}
         # Maturity buckets (Stability based)
         stability_buckets = {"New": 0, "Learning": 0, "Review": 0, "Mature": 0}
         
-        total_stability = 0
         success_count = 0
         reviewed_in_deck = 0
 
@@ -158,10 +180,13 @@ class FlashcardStatistics:
             
             if state != 0:
                 reviewed_in_deck += 1
-                total_stability += stability
-                # Retention/Success Estimate
-                if stability > difficulty:
-                    success_count += 1
+                # Retention/Success Estimate: Probability that R > 0.8
+                if stability > 0:
+                    lr = datetime.datetime.fromisoformat(last_review_str)
+                    if lr.tzinfo is None: lr = lr.replace(tzinfo=datetime.timezone.utc)
+                    t = (now - lr).days
+                    if (0.9 ** (t/stability)) > 0.8:
+                        success_count += 1
             
             # Memory Stability Buckets
             try:
@@ -191,9 +216,8 @@ class FlashcardStatistics:
             "deck": {
                 "success_rate": round(success_count / reviewed_in_deck * 100, 1) if reviewed_in_deck > 0 else 0,
                 "freshness": list(freshness.items()),
-                "maturity_score": round(total_stability / reviewed_in_deck, 1) if reviewed_in_deck > 0 else 0,
+                "retention_rate": round(avg_retention, 1),
                 "stability": list(stability_buckets.items()),
-                "efficiency": round(total_stability / reviewed_in_deck, 1) if reviewed_in_deck > 0 else 0 # Avg Stability as proxy
             },
             "available_decks": sorted(list(set(c[5] for c in all_cards)))
         }
