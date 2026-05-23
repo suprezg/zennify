@@ -18,3 +18,4 @@ venv.bak/
 GEMINI.md
 zennify_storage.db
 config.json
+pomodoro_state.json
