@@ -12,6 +12,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from core.activity.service import ActivitySettings, ActivityStatistics, ActivityReview
 from core.shared.configurator import ConfigManager
+from core.shared.wallet import WalletManager
 
 matplotlib.use("agg")
 
@@ -33,6 +34,7 @@ class ActivityDashboard:
         self.config_manager = ConfigManager()
         self.stats_service = ActivityStatistics()
         self.review_service = ActivityReview()
+        self.wallet_manager = WalletManager()
 
         self.current_month = datetime.datetime.now().strftime("%m")
         self.current_year = datetime.datetime.now().strftime("%Y")
@@ -78,6 +80,14 @@ class ActivityDashboard:
         )
 
         self.page.add(tabs)
+
+        if self.wallet_manager.is_bankrupt() == -1:
+            dialog = ft.AlertDialog(
+                title=ft.Text("Wallet Warning"),
+                content=ft.Text("Your wallet balance is currently negative. You can try to recover by being more productive or declare bankruptcy by running 'zennify.sh --bankrupt' in your terminal."),
+                actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
+            )
+            self.page.show_dialog(dialog)
 
     def _review_tab(self):
         """
@@ -404,7 +414,7 @@ class ActivityDashboard:
         """
         service_status = self.config_manager.read_value("activity", "service_status") or False
         popup_interval = self.config_manager.read_value("activity", "popup_interval_timer") or "30m"
-        popup_visible = self.config_manager.read_value("activity", "popup_visible_timer") or "1m"
+        popup_visible = self.config_manager.read_value("activity", "popup_visible_timer") or "2m"
 
         def update_service(e):
             self.settings_service.toggle_service(e.control.value)

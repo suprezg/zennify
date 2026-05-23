@@ -8,6 +8,7 @@ import asyncio
 import flet as ft
 from core.activity.service import ActivitySettings, ActivityStorage
 from core.shared.configurator import ConfigManager
+from core.shared.wallet import WalletManager
 
 
 class ActivityPopup:
@@ -26,6 +27,7 @@ class ActivityPopup:
         self.settings_service = ActivitySettings()
         self.config_manager = ConfigManager()
         self.storage_service = ActivityStorage()
+        self.wallet_manager = WalletManager()
         
         interval_timer = self.config_manager.read_value("activity", "popup_interval_timer") or "30m"
         visible_timer = self.config_manager.read_value("activity", "popup_visible_timer") or "1m"
@@ -169,6 +171,7 @@ class ActivityPopup:
             retribution
         )
         
+        self.wallet_manager.earn_coins(retribution)
         self.settings_service.update_streak_data(streak, round(multiplier, 1))
         
         self.page.run_task(self.page.window.destroy)

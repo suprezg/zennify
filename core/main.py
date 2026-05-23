@@ -44,7 +44,19 @@ def main(page: ft.Page):
     elif mode == "--reset":
         pass
     elif mode == "--bankrupt":
-        pass
+        print("WARNING: You are about to declare bankruptcy.")
+        print("This action is UNCHANGEABLE. You cannot go back.")
+        print("Your wallet coins will be set to 0 and your bankrupt count will increment by 1.")
+        try:
+            confirm = input("Type 'yes' to declare bankruptcy, or 'no' to cancel: ")
+            if confirm.strip().lower() == "yes":
+                from core.shared.wallet import WalletManager
+                WalletManager().declare_bankrupt()
+                print("Bankruptcy declared successfully. Your wallet has been reset.")
+            else:
+                print("Action cancelled.")
+        except EOFError:
+            print("\nError: Terminal input required for bankruptcy declaration.")
     else:
         page.add(ft.Text(f"Unknown mode: {mode}"))
 
