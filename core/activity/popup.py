@@ -91,7 +91,7 @@ class ActivityPopup:
                         ft.Row([self.tag_dropdown, self.new_tag_input], spacing=10),
                         ft.Text("Was this interval productive?", size=14, weight=ft.FontWeight.W_500),
                         self.productivity_radio,
-                        ft.ElevatedButton(
+                        ft.Button(
                             "Log Activity",
                             on_click=lambda e: self._submit(),
                             width=200,

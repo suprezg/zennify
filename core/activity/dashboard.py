@@ -153,7 +153,7 @@ class ActivityDashboard:
             heatmap_container.visible = True
             self.page.update()
 
-        show_button = ft.ElevatedButton("Show", on_click=show_heatmap, height=50)
+        show_button = ft.Button("Show", on_click=show_heatmap, height=50)
 
         controls_row = ft.Row(
             [ft.Text("Select Period:", size=16), month_dropdown, year_dropdown, show_button],
@@ -381,7 +381,7 @@ class ActivityDashboard:
             charts_container.visible = True
             self.page.update()
 
-        show_button = ft.ElevatedButton("Show", on_click=show_overview, height=50)
+        show_button = ft.Button("Show", on_click=show_overview, height=50)
 
         picker_row = ft.Row(
             [ft.Text("Filter:", size=16), month_dropdown, year_dropdown, show_button],

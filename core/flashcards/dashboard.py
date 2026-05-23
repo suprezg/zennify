@@ -96,7 +96,7 @@ class FlashcardDashboard:
                         ft.Icon(ft.Icons.ANALYTICS_OUTLINED, size=50, color=ft.Colors.GREY_400),
                         ft.Text("Not Enough Data", size=24, weight=ft.FontWeight.BOLD),
                         ft.Text(f"Revise at least 5 cards to see your analytics. ({g_stats['revised_count']}/5)", color=ft.Colors.GREY_400),
-                        ft.ElevatedButton("Go to Revision", on_click=lambda _: self.view(0), height=50)
+                        ft.Button("Go to Revision", on_click=lambda _: self.view(0), height=50)
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     expand=True,
                     alignment=ft.Alignment.CENTER
@@ -335,7 +335,7 @@ class FlashcardDashboard:
             self._start_fsrs_session(cards)
 
         rescan_btn = ft.IconButton(icon=ft.Icons.SYNC, on_click=on_rescan, tooltip="Rescan Folder")
-        revise_btn = ft.ElevatedButton("Start Revision", on_click=on_revise, height=50)
+        revise_btn = ft.Button("Start Revision", on_click=on_revise, height=50)
 
         return ft.Column([
             ft.Row([rescan_btn], alignment=ft.MainAxisAlignment.END),
@@ -437,13 +437,13 @@ class FlashcardDashboard:
             rating_row.visible = False
             self.page.update()
 
-        show_btn = ft.ElevatedButton("Show Answer", on_click=show_answer, height=50)
+        show_btn = ft.Button("Show Answer", on_click=show_answer, height=50)
         
         rating_row = ft.Row([
-            ft.ElevatedButton("Again", on_click=lambda e: rate_card(e, 1), bgcolor=ft.Colors.RED_700, color=ft.Colors.WHITE),
-            ft.ElevatedButton("Hard", on_click=lambda e: rate_card(e, 2), bgcolor=ft.Colors.ORANGE_700, color=ft.Colors.WHITE),
-            ft.ElevatedButton("Good", on_click=lambda e: rate_card(e, 3), bgcolor=ft.Colors.GREEN_700, color=ft.Colors.WHITE),
-            ft.ElevatedButton("Easy", on_click=lambda e: rate_card(e, 4), bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE)
+            ft.Button("Again", on_click=lambda e: rate_card(e, 1), bgcolor=ft.Colors.RED_700, color=ft.Colors.WHITE),
+            ft.Button("Hard", on_click=lambda e: rate_card(e, 2), bgcolor=ft.Colors.ORANGE_700, color=ft.Colors.WHITE),
+            ft.Button("Good", on_click=lambda e: rate_card(e, 3), bgcolor=ft.Colors.GREEN_700, color=ft.Colors.WHITE),
+            ft.Button("Easy", on_click=lambda e: rate_card(e, 4), bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE)
         ], visible=False, alignment=ft.MainAxisAlignment.CENTER, spacing=15)
 
         dialog = ft.AlertDialog(
@@ -508,7 +508,7 @@ class FlashcardDashboard:
             snack.open = True
             self.page.update()
 
-        update_btn = ft.ElevatedButton("Update & Rescan", on_click=update_path, height=50)
+        update_btn = ft.Button("Update & Rescan", on_click=update_path, height=50)
 
         return ft.Container(
             content=ft.Column([
