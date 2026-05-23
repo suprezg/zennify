@@ -60,7 +60,7 @@ class StorageManager:
             description TEXT,
             tag TEXT,
             is_productive BOOLEAN,
-            retribution INTEGER
+            retribution REAL
         );
         CREATE TABLE IF NOT EXISTS flashcard (
             card_id TEXT PRIMARY KEY,
@@ -79,7 +79,7 @@ class StorageManager:
             deadline TEXT,
             status TEXT,
             completion_time TEXT,
-            retribution INTEGER
+            retribution REAL
         );
         CREATE TABLE IF NOT EXISTS pomodoro (
             session_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +87,7 @@ class StorageManager:
             start_time TEXT,
             end_time TEXT,
             duration_mins INTEGER,
-            retribution INTEGER
+            retribution REAL
         );
         CREATE TABLE IF NOT EXISTS shop (
             item_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,7 +97,7 @@ class StorageManager:
         );
         CREATE TABLE IF NOT EXISTS wallet (
             id INTEGER PRIMARY KEY CHECK (id = 1),
-            total_coins INTEGER DEFAULT 0,
+            total_coins REAL DEFAULT 0,
             bankruptcy_count INTEGER DEFAULT 0
         );
         INSERT OR IGNORE INTO wallet (id, total_coins, bankruptcy_count) VALUES (1, 0, 0);

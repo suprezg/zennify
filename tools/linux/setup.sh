@@ -63,9 +63,7 @@ config = {
         \"folder_path\": \"$PROJECT_ROOT\"
     },
     \"todo_config\": {
-        \"service_path\": os.path.expanduser(\"~/.config/systemd/user/zennify-todo.service\"),
-        \"service_status\": False,
-        \"todo_interval_timer\": \"1h\",
+        \"max_tasks\": 5,
         \"streak\": 0,
         \"multiplier\": 1.0
     },
@@ -103,19 +101,6 @@ Persistent=false
 
 [Install]
 WantedBy=timers.target
-EOF
-
-cat <<EOF > ~/.config/systemd/user/zennify-todo.service
-[Unit]
-Description=Zennify Todo Service
-After=network.target
-
-[Service]
-ExecStart=$ZENNIFY_SH --todos
-Restart=always
-
-[Install]
-WantedBy=default.target
 EOF
 
 systemctl --user daemon-reload
