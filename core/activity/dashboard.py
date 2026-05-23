@@ -4,10 +4,16 @@ Purpose: User interface for the Activity Tracker feature.
 """
 
 import datetime
+import io
+import base64
+import math
 import flet as ft
-import flet_charts as fch
+import matplotlib
+import matplotlib.pyplot as plt
 from core.activity.service import ActivitySettings, ActivityStatistics, ActivityReview
 from core.shared.configurator import ConfigManager
+
+matplotlib.use("agg")
 
 
 class ActivityDashboard:
@@ -238,9 +244,45 @@ class ActivityDashboard:
             width=120
         )
 
-        charts_container = ft.Column(visible=False, expand=True, scroll=ft.ScrollMode.ALWAYS)
+        charts_container = ft.Column(visible=False, expand=True, spacing=40)
         spacer_mid = ft.Container(expand=True)
         spacer_bottom = ft.Container(expand=True)
+
+        bg_color = "#111418"
+        plt.rcParams.update({
+            "text.color": "white",
+            "axes.labelcolor": "white",
+            "xtick.color": "white",
+            "ytick.color": "white",
+            "axes.edgecolor": "white",
+        })
+
+        def fig_to_base64(fig):
+            buf = io.BytesIO()
+            fig.tight_layout(pad=1.5)
+            fig.savefig(buf, format="png", bbox_inches="tight", facecolor=bg_color, dpi=100)
+            plt.close(fig)
+            return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+        def row_builder(title, visual_content, explanation, insight):
+            return ft.Row([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text(title, size=16, weight=ft.FontWeight.BOLD),
+                        visual_content
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    expand=3, border=ft.Border.all(2, ft.Colors.WHITE), border_radius=10, padding=10
+                ),
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("About this Metric", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200),
+                        ft.Text(explanation, size=14, color=ft.Colors.GREY_300),
+                        ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                        ft.Text(insight, size=15, weight=ft.FontWeight.W_500, color=ft.Colors.AMBER_ACCENT)
+                    ], spacing=10),
+                    expand=2, padding=30, alignment=ft.Alignment.TOP_LEFT
+                )
+            ], vertical_alignment=ft.CrossAxisAlignment.START, spacing=20)
 
         def show_overview(e):
             spacer_mid.visible = False
@@ -249,90 +291,83 @@ class ActivityDashboard:
 
             data = self.stats_service.give_overview(month_dropdown.value, year_dropdown.value)
 
+            # 1. Productivity Ratio (Pie Chart)
+            fig1, ax1 = plt.subplots(figsize=(7, 4))
+            ax1.set_facecolor(bg_color)
             pie_data = data.get("pie_data", {})
-            total = pie_data.get("productive", 0) + pie_data.get("unproductive", 0)
+            prod = pie_data.get("productive", 0)
+            unprod = pie_data.get("unproductive", 0)
+            total = prod + unprod
             if total > 0:
-                prod_per = (pie_data["productive"] / total) * 100
-                unprod_per = (pie_data["unproductive"] / total) * 100
-                pie_chart = fch.PieChart(
-                    sections=[
-                        fch.PieChartSection(pie_data["productive"], title=f"{prod_per:.0f}%", color=ft.Colors.GREEN, radius=60, title_style=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)),
-                        fch.PieChartSection(pie_data["unproductive"], title=f"{unprod_per:.0f}%", color=ft.Colors.RED, radius=60, title_style=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)),
-                    ],
-                    sections_space=2,
-                    center_space_radius=30,
-                    expand=True,
-                )
+                ax1.pie([prod, unprod], labels=["Productive", "Unproductive"], autopct='%1.1f%%', colors=["#66BB6A", "#EF5350"], textprops={'color':"w"})
+                prod_pc = round((prod / total * 100), 1)
             else:
-                pie_chart = ft.Container(content=ft.Text("No data", color=ft.Colors.GREY_500), alignment=ft.Alignment.CENTER, expand=True)
+                ax1.text(0.5, 0.5, "No Data", ha='center', va='center', color="white")
+                prod_pc = 0
+            chart1_base64 = fig_to_base64(fig1)
 
+            # 2. Activity Mix (Top 5) (Radar Chart)
             radar_data = data.get("radar_data", [])
+            fig2 = plt.figure(figsize=(7, 4))
+            fig2.patch.set_facecolor(bg_color)
             if len(radar_data) >= 3:
-                radar_chart = fch.RadarChart(
-                    expand=True,
-                    titles=[fch.RadarChartTitle(text=item[0]) for item in radar_data],
-                    tick_count=3,
-                    ticks_text_style=ft.TextStyle(size=12, color=ft.Colors.GREY_400),
-                    title_text_style=ft.TextStyle(size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200),
-                    radar_shape=fch.RadarShape.POLYGON,
-                    title_position_percentage_offset=0.05,
-                    data_sets=[
-                        fch.RadarDataSet(
-                            fill_color=ft.Colors.with_opacity(0.3, ft.Colors.BLUE_ACCENT),
-                            border_color=ft.Colors.BLUE_ACCENT,
-                            border_width=2,
-                            entry_radius=3,
-                            entries=[fch.RadarDataSetEntry(value=item[1]) for item in radar_data],
-                        ),
-                    ],
-                )
+                ax2 = fig2.add_subplot(111, polar=True)
+                ax2.set_facecolor(bg_color)
+                labels = [item[0] for item in radar_data]
+                values = [item[1] for item in radar_data]
+                num_vars = len(labels)
+                angles = [n / float(num_vars) * 2 * math.pi for n in range(num_vars)]
+                angles += angles[:1]
+                values += values[:1]
+                ax2.plot(angles, values, linewidth=1, linestyle='solid', color="#42A5F5")
+                ax2.fill(angles, values, "#42A5F5", alpha=0.3)
+                ax2.set_xticks(angles[:-1])
+                ax2.set_xticklabels(labels, color="white", size=10)
+                ax2.tick_params(axis='y', colors='white')
+                top_activity = labels[0] if labels else "None"
             else:
-                if 0 < len(radar_data) < 3:
-                    dialog = ft.AlertDialog(
-                        title=ft.Text("Insufficient Data"),
-                        content=ft.Text("Radar chart requires at least 3 unique activities to render."),
-                        actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
-                    )
-                    self.page.show_dialog(dialog)
-                radar_chart = ft.Container(content=ft.Text("Not enough data", color=ft.Colors.GREY_500), alignment=ft.Alignment.CENTER, expand=True)
+                ax2 = fig2.add_subplot(111)
+                ax2.set_facecolor(bg_color)
+                ax2.text(0.5, 0.5, "Not enough data (needs 3+)", ha='center', va='center', color="white")
+                ax2.axis('off')
+                top_activity = "None"
+            chart2_base64 = fig_to_base64(fig2)
 
+            # 3. Detailed Tag Frequency (Bar Chart)
+            fig3, ax3 = plt.subplots(figsize=(7, 4))
+            ax3.set_facecolor(bg_color)
             bar_data = data.get("bar_data", [])
             if bar_data:
-                bar_groups = []
-                axis_labels = []
-                for i, (tag, count) in enumerate(bar_data):
-                    bar_groups.append(
-                        fch.BarChartGroup(
-                            x=i,
-                            rods=[fch.BarChartRod(from_y=0, to_y=count, color=ft.Colors.CYAN_700, width=30, border_radius=3)]
-                        )
-                    )
-                    axis_labels.append(fch.ChartAxisLabel(value=i, label=ft.Text(tag, size=12, color=ft.Colors.GREY_400, no_wrap=True)))
-                
-                max_count = max(item[1] for item in bar_data) if bar_data else 10
-                bar_chart = fch.BarChart(
-                    groups=bar_groups,
-                    interactive=True,
-                    bottom_axis=fch.ChartAxis(labels=axis_labels, label_size=30),
-                    left_axis=fch.ChartAxis(labels=[fch.ChartAxisLabel(value=0, label=ft.Text("0", size=10)), fch.ChartAxisLabel(value=max_count, label=ft.Text(str(max_count), size=10))], label_size=30),
-                    expand=True,
-                )
+                labels = [item[0] for item in bar_data]
+                counts = [item[1] for item in bar_data]
+                ax3.bar(labels, counts, color="#26C6DA")
+                ax3.tick_params(axis='x', rotation=45)
             else:
-                bar_chart = ft.Container(content=ft.Text("No data", color=ft.Colors.GREY_500), alignment=ft.Alignment.CENTER, expand=True)
+                ax3.text(0.5, 0.5, "No Data", ha='center', va='center', color="white")
+            chart3_base64 = fig_to_base64(fig3)
 
-            row1 = ft.Row(
-                [
-                    ft.Container(content=ft.Column([ft.Text("Activity Mix (Top 5)", size=14, weight=ft.FontWeight.BOLD), radar_chart], horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True), bgcolor=None, expand=True, height=300, border_radius=10, padding=15, margin=5, border=ft.Border.all(2, ft.Colors.WHITE)),
-                    ft.Container(content=ft.Column([ft.Text("Productivity Ratio", size=14, weight=ft.FontWeight.BOLD), pie_chart], horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True), bgcolor=None, expand=True, height=300, border_radius=10, padding=15, margin=5, border=ft.Border.all(2, ft.Colors.WHITE)),
-                ]
-            )
-            row2 = ft.Row(
-                [
-                    ft.Container(content=ft.Column([ft.Text("Detailed Tag Frequency", size=14, weight=ft.FontWeight.BOLD), bar_chart], horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True), bgcolor=None, expand=True, height=350, border_radius=10, padding=15, margin=5, border=ft.Border.all(2, ft.Colors.WHITE))
-                ]
-            )
+            rows = [
+                row_builder(
+                    "Productivity Ratio",
+                    ft.Image(src=chart1_base64, height=300, fit=ft.BoxFit.CONTAIN),
+                    "This chart shows the balance between your productive and unproductive sessions. It gives a quick glance at how effectively you're spending your logged time.",
+                    f"Your productivity ratio for this month is {prod_pc}%."
+                ),
+                row_builder(
+                    "Activity Mix (Top 5)",
+                    ft.Image(src=chart2_base64, height=300, fit=ft.BoxFit.CONTAIN),
+                    "The radar chart displays your top 5 activities, forming a 'shape' of your habits. A well-rounded shape indicates varied activities, while spikes show intense focus on specific areas.",
+                    f"Your dominant activity is '{top_activity}'."
+                ),
+                row_builder(
+                    "Detailed Tag Frequency",
+                    ft.Image(src=chart3_base64, height=300, fit=ft.BoxFit.CONTAIN),
+                    "This bar chart provides a detailed breakdown of all your activity tags by their frequency of use, highlighting where your time is being invested the most.",
+                    f"You have tracked {len(bar_data)} different activities this month."
+                )
+            ]
 
-            charts_container.controls.extend([row1, row2])
+            charts_container.controls.extend(rows)
             charts_container.visible = True
             self.page.update()
 
@@ -346,14 +381,18 @@ class ActivityDashboard:
 
         return ft.Column(
             [
-                ft.Container(content=metrics_row, padding=30),
+                ft.Container(content=metrics_row, padding=20),
+                ft.Divider(height=1, color=ft.Colors.GREY_800),
                 spacer_mid,
-                ft.Container(content=picker_row),
+                ft.Container(content=picker_row, padding=20),
+                ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
                 charts_container,
                 spacer_bottom
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            expand=True
+            expand=True,
+            scroll=ft.ScrollMode.AUTO,
+            spacing=30
         )
 
     def _settings_tab(self):
