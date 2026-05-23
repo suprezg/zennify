@@ -67,7 +67,12 @@ config = {
         \"streak\": 0,
         \"multiplier\": 1.0
     },
-    \"pomodoro_config\": {},
+    \"pomodoro_config\": {
+        \"work_time\": \"60m\",
+        \"short_break_time\": \"5M\",
+        \"long_break_time\": \"15M\",
+        \"long_break_interval\": \"2\"
+    },
     \"shop_config\": {}
 }
 with open('$DATA_DIR/config.json', 'w') as f:

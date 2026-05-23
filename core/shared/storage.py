@@ -87,7 +87,7 @@ class StorageManager:
             start_time TEXT,
             end_time TEXT,
             duration_mins INTEGER,
-            retribution REAL
+            phase TEXT
         );
         CREATE TABLE IF NOT EXISTS shop (
             item_id INTEGER PRIMARY KEY AUTOINCREMENT,
