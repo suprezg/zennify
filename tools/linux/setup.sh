@@ -60,9 +60,7 @@ config = {
         \"multiplier\": 1.0
     },
     \"flashcard_config\": {
-        \"flashcard_folder\": \"flashcards\",
-        \"streak\": 0,
-        \"multiplier\": 1.0
+        \"folder_path\": \"$PROJECT_ROOT\"
     },
     \"todo_config\": {
         \"service_path\": os.path.expanduser(\"~/.config/systemd/user/zennify-todo.service\"),

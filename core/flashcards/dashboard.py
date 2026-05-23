@@ -103,18 +103,6 @@ class FlashcardDashboard:
                 )
             ], expand=True)
 
-        # 1. Top Metrics (Activity Style)
-        streak = g_stats["streak"]
-        multiplier = g_stats["multiplier"]
-        metrics_row = ft.Row(
-            [
-                ft.Row([ft.Icon(ft.Icons.LOCAL_FIRE_DEPARTMENT, color=ft.Colors.ORANGE), ft.Text(f"Streak: {streak}", size=18, weight=ft.FontWeight.BOLD)]),
-                ft.Row([ft.Icon(ft.Icons.CLOSE, color=ft.Colors.CYAN), ft.Text(f"Multiplier: {multiplier}x", size=18, weight=ft.FontWeight.BOLD)])
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=50
-        )
-
         # 2. Charts Preparation logic
         bg_color = "#111418"
         plt.rcParams.update({
@@ -379,8 +367,35 @@ class FlashcardDashboard:
         current_index = 0
         total_cards = len(cards)
         
-        card_text = ft.Text(cards[current_index]["question"], size=22, weight=ft.FontWeight.W_500, text_align=ft.TextAlign.CENTER)
-        answer_text = ft.Text(cards[current_index]["answer"], size=18, color=ft.Colors.GREY_300, visible=False)
+        card_text = ft.Markdown(
+            cards[current_index]["question"], 
+            extension_set=ft.MarkdownExtensionSet.GITHUB_FLAVORED,
+            auto_follow_links=True,
+            md_style_sheet=ft.MarkdownStyleSheet(
+                code_text_style=ft.TextStyle(
+                    bgcolor="#2E2E2E",
+                    color="#EB5757",
+                    font_family="monospace",
+                    weight=ft.FontWeight.BOLD,
+                    size=14,
+                )
+            )
+        )
+        answer_text = ft.Markdown(
+            cards[current_index]["answer"], 
+            extension_set=ft.MarkdownExtensionSet.GITHUB_FLAVORED,
+            auto_follow_links=True,
+            visible=False,
+            md_style_sheet=ft.MarkdownStyleSheet(
+                code_text_style=ft.TextStyle(
+                    bgcolor="#2E2E2E",
+                    color="#EB5757",
+                    font_family="monospace",
+                    weight=ft.FontWeight.BOLD,
+                    size=14,
+                )
+            )
+        )
         
         progress_text = ft.Text(f"Card 1 of {total_cards}", size=14, color=ft.Colors.GREY_400)
         
@@ -438,7 +453,12 @@ class FlashcardDashboard:
                 content=ft.Column([
                     ft.Container(content=card_text, padding=20, alignment=ft.Alignment.CENTER),
                     ft.Divider(height=1, color=ft.Colors.GREY_800),
-                    ft.Container(content=answer_text, padding=20, alignment=ft.Alignment.CENTER, expand=True)
+                    ft.Container(
+                        content=ft.Column([answer_text], scroll=ft.ScrollMode.AUTO, expand=True), 
+                        padding=20, 
+                        alignment=ft.Alignment.TOP_LEFT, 
+                        expand=True
+                    )
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 width=600, height=400
             ),

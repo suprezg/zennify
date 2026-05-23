@@ -96,14 +96,12 @@ class FlashcardStatistics:
         all_cards = self.storage.read_entries("SELECT stability, difficulty, state, next_review, last_review, deck_name FROM flashcard")
         
         # Global Metrics
-        streak = self.config_manager.read_value("activity", "streak") or 0
-        multiplier = self.config_manager.read_value("activity", "multiplier") or 1.0
         
         now = datetime.datetime.now(datetime.timezone.utc)
         total_cards = len(all_cards)
         
-        # FSRS State 0 is New. Revised cards are Learning (1), Review (2), Relearning (3).
-        revised_cards = [c for c in all_cards if c[2] != 0]
+        # A card is considered revised if it has a non-null stability
+        revised_cards = [c for c in all_cards if c[0] is not None]
         revised_count = len(revised_cards)
         
         # Calculate Retrievability (R = 0.9^(t/S)) and Active Knowledge (Sum of R)
@@ -111,7 +109,7 @@ class FlashcardStatistics:
         sum_r_all = 0
         for c in all_cards:
             stability, difficulty, state, _, last_review_str, _ = c
-            if state == 0:
+            if stability is None or stability == 0:
                 continue
                 
             try:
@@ -133,7 +131,9 @@ class FlashcardStatistics:
         # Difficulty Distribution Histogram
         diff_dist = {"Very Easy": 0, "Easy": 0, "Medium": 0, "Hard": 0, "Very Hard": 0}
         for c in all_cards:
-            d = c[1] or 0
+            if c[1] is None:
+                continue
+            d = c[1]
             if d < 2: diff_dist["Very Easy"] += 1
             elif d < 4: diff_dist["Easy"] += 1
             elif d < 6: diff_dist["Medium"] += 1
@@ -149,6 +149,8 @@ class FlashcardStatistics:
         for c in all_cards:
             try:
                 if not c[3]: continue
+                # Only forecast cards that have been revised (stability is not None)
+                if c[0] is None: continue
                 due = datetime.datetime.fromisoformat(c[3])
                 if due.tzinfo is None: due = due.replace(tzinfo=datetime.timezone.utc)
                 if now <= due <= (now + datetime.timedelta(days=30)):
@@ -160,7 +162,7 @@ class FlashcardStatistics:
         # Deck Specific Metrics
         deck_cards = all_cards if deck_name == "ALL" else [c for c in all_cards if c[5] == deck_name]
         
-        # Freshness Ratio (Using State)
+        # Freshness Ratio (Using Stability & State)
         freshness = {"New": 0, "Learning": 0, "Review": 0}
         # Maturity buckets (Stability based)
         stability_buckets = {"New": 0, "Learning": 0, "Review": 0, "Mature": 0}
@@ -170,27 +172,27 @@ class FlashcardStatistics:
 
         for c in deck_cards:
             stability, difficulty, state, next_review_str, last_review_str, _ = c
-            stability = stability or 0
-            difficulty = difficulty or 0
             
             # Freshness
-            if state == 0: freshness["New"] += 1
-            elif state in (1, 3): freshness["Learning"] += 1
-            else: freshness["Review"] += 1
+            if stability is None: 
+                freshness["New"] += 1
+            elif state in (1, 3): 
+                freshness["Learning"] += 1
+            else: 
+                freshness["Review"] += 1
             
-            if state != 0:
+            if stability is not None and stability > 0:
                 reviewed_in_deck += 1
                 # Retention/Success Estimate: Probability that R > 0.8
-                if stability > 0:
-                    lr = datetime.datetime.fromisoformat(last_review_str)
-                    if lr.tzinfo is None: lr = lr.replace(tzinfo=datetime.timezone.utc)
-                    t = (now - lr).days
-                    if (0.9 ** (t/stability)) > 0.8:
-                        success_count += 1
+                lr = datetime.datetime.fromisoformat(last_review_str)
+                if lr.tzinfo is None: lr = lr.replace(tzinfo=datetime.timezone.utc)
+                t = (now - lr).days
+                if (0.9 ** (t/stability)) > 0.8:
+                    success_count += 1
             
             # Memory Stability Buckets
             try:
-                if not next_review_str or not last_review_str:
+                if stability is None or not next_review_str or not last_review_str:
                     stability_buckets["New"] += 1
                     continue
                     
@@ -206,10 +208,8 @@ class FlashcardStatistics:
 
         return {
             "global": {
-                "streak": streak,
-                "multiplier": multiplier,
                 "active_knowledge": round(active_knowledge_pc, 1),
-                "difficulty_dist": list(diff_dist.items()),
+                "difficulty_dist": list(diff_dist.items()) if sum(diff_dist.values()) > 0 else [("None", 1)],
                 "forecast": sorted(forecast.items()),
                 "revised_count": revised_count
             },
@@ -246,6 +246,7 @@ class FlashcardRevision:
         Takes: None
         Gives: None
         """
+        import re
         folder_path = self.config_manager.read_value("flashcard", "folder_path")
         if not folder_path or not os.path.exists(folder_path):
             return
@@ -267,10 +268,22 @@ class FlashcardRevision:
                     except Exception:
                         continue
 
-                    if "tags: flashcards" not in content.lower():
+                    # Robustly extract frontmatter and body
+                    match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)', content, re.DOTALL)
+                    if not match:
+                        continue
+                    frontmatter, body = match.groups()
+                    
+                    # Search for tags in frontmatter
+                    tags_match = re.search(r'^tags:\s*(.*)', frontmatter, re.MULTILINE | re.IGNORECASE)
+                    if not tags_match:
+                        continue
+                    tags_line = tags_match.group(1).lower()
+                    if 'flashcards' not in tags_line:
                         continue
 
-                    parts = content.split("# ")
+                    # Split by heading taking care of newlines so we don't match internal '#' inside answers
+                    parts = re.split(r'\n#\s+', '\n' + body)
                     for part in parts[1:]:
                         lines = part.strip().split("\n")
                         if not lines:
@@ -301,7 +314,7 @@ class FlashcardRevision:
                                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                                 (
                                     id_hash, content_hash, deck_name, card.stability, card.difficulty,
-                                    card.state.value, now.isoformat(), now.isoformat()
+                                    int(card.state), now.isoformat(), now.isoformat()
                                 )
                             )
         
