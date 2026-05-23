@@ -106,7 +106,7 @@ class TodoDashboard:
 
         date_picker = ft.DatePicker(
             on_change=on_date_change,
-            first_date=datetime.datetime.now(),
+            first_date=datetime.datetime.now() - datetime.timedelta(days=2),
             last_date=datetime.datetime.now() + datetime.timedelta(days=365)
         )
         
@@ -166,7 +166,7 @@ class TodoDashboard:
 
         def update_heatmap(e=None):
             heatmap_container.controls.clear()
-            data = self.tasks_service.list_completed_tasks(month_dropdown.value, year_dropdown.value)
+            data = self.tasks_service.list_finalized_tasks(month_dropdown.value, year_dropdown.value)
             
             # Map completion_time to day
             day_map = {}
@@ -185,19 +185,24 @@ class TodoDashboard:
                 color = self._get_heatmap_color(count)
 
                 def on_day_click(e, ts=tasks_today, d=day):
-                    if not ts: return
                     content = ft.ListView(expand=True, spacing=10, height=300)
-                    for t in ts:
-                        content.controls.append(
-                            ft.ListTile(
-                                title=ft.Text(t[1]), 
-                                subtitle=ft.Text(f"Deadline: {t[3][:10]} | Earned: {t[6]}"),
-                                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400)
+                    if ts:
+                        for t in ts:
+                            status_color = ft.Colors.GREEN_ACCENT if t[4] == "Completed" else ft.Colors.RED_ACCENT
+                            content.controls.append(
+                                ft.ListTile(
+                                    title=ft.Text(f"{t[1]} ({t[4]})", color=status_color, weight=ft.FontWeight.BOLD), 
+                                    subtitle=ft.Text(f"Deadline: {t[3][:10]} | Earned: {t[6]}"),
+                                    bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400)
+                                )
                             )
-                        )
+                    else:
+                        content.controls.append(ft.Text("No tasks finalized on this day.", italic=True))
+
                     dialog = ft.AlertDialog(
                         title=ft.Text(f"Tasks: {year_dropdown.value}-{month_dropdown.value}-{d:02d}"), 
-                        content=ft.Container(content=content, width=400)
+                        content=ft.Container(content=content, width=400),
+                        actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
                     )
                     self.page.show_dialog(dialog)
 

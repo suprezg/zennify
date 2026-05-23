@@ -193,22 +193,16 @@ class ActivityDashboard:
         Gives: None
         """
         entries = self.review_service.get_activity(date_str)
-        content_list = ft.ListView(expand=True, spacing=10, height=400)
+        content_list = ft.ListView(expand=True, spacing=10, height=300)
 
         for entry in entries:
+            status = "Productive" if entry[6] else "Unproductive"
+            status_color = ft.Colors.GREEN_ACCENT if entry[6] else ft.Colors.RED_ACCENT
             content_list.controls.append(
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Text(f"{entry[2]} - {entry[3]}", weight=ft.FontWeight.W_600),
-                                ft.Text(f"#{entry[5]}", color=ft.Colors.BLUE_200),
-                                ft.Text(f"{entry[7]} coins", color=ft.Colors.GREEN_ACCENT if entry[7] >= 0 else ft.Colors.RED_ACCENT, weight=ft.FontWeight.BOLD)
-                            ],
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-                        ),
-                        padding=15
-                    )
+                ft.ListTile(
+                    title=ft.Text(f"{entry[2]} - {entry[3]} | #{entry[5]} ({status})", color=status_color, weight=ft.FontWeight.BOLD),
+                    subtitle=ft.Text(f"{entry[4]} | Earned: {entry[7]} coins"),
+                    bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400)
                 )
             )
 
@@ -217,7 +211,7 @@ class ActivityDashboard:
 
         dialog = ft.AlertDialog(
             title=ft.Text(f"Review: {date_str}"),
-            content=ft.Container(content=content_list, width=500),
+            content=ft.Container(content=content_list, width=400),
             actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
         )
         self.page.show_dialog(dialog)

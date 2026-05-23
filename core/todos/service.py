@@ -181,16 +181,16 @@ class TodoTasks:
             "SELECT task_id, task_name, deadline FROM todo WHERE status = 'Running' ORDER BY deadline ASC"
         )
 
-    def list_completed_tasks(self, month, year):
+    def list_finalized_tasks(self, month, year):
         """
-        Retrieves tasks completed in a specific period for the heatmap.
+        Retrieves tasks finalized (Completed or Failed) in a specific period for the heatmap.
 
         Takes: month (str), year (str)
         Gives: list of records
         """
         pattern = f"{year}-{month}-%"
         return self.storage.read_entries(
-            "SELECT * FROM todo WHERE completion_time LIKE ? AND status = 'Completed'", 
+            "SELECT * FROM todo WHERE completion_time LIKE ? AND status IN ('Completed', 'Failed')", 
             (pattern,)
         )
 
