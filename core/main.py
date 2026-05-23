@@ -41,8 +41,6 @@ def main(page: ft.Page):
     elif mode == "--shop":
         from core.shop.dashboard import ShopDashboard
         ShopDashboard(page).view()
-    elif mode == "--reset":
-        pass
     elif mode == "--bankrupt":
         print("WARNING: You are about to declare bankruptcy.")
         print("This action is UNCHANGEABLE. You cannot go back.")
