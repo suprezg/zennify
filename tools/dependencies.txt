@@ -1,0 +1,4 @@
+flet==0.85.0
+pytest==9.0.0
+fsrs==6.3.0
+matplotlib==3.10.9
