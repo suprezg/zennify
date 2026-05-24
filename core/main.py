@@ -7,18 +7,42 @@ import sys
 import flet as ft
 
 
+def show_help():
+    """
+    Prints the usage guide to the terminal for available CLI commands.
+
+    Takes:
+        None: Reads from hardcoded help strings.
+
+    Gives:
+        None: Outputs the help menu to the console.
+    """
+    print("\nZennify CLI - Usage Guide")
+    print("=========================")
+    print("\nOptions:")
+    print("  --activity        Launch the Activity Tracking Dashboard")
+    print("  --activity-popup  Launch the Activity Reward/Retribution Popup")
+    print("  --flashcards      Launch the Flashcard Study Dashboard")
+    print("  --todos           Launch the Todo Management Dashboard")
+    print("  --pomodoro        Launch the Pomodoro Timer Dashboard")
+    print("  --shop            Launch the Reward Shop")
+    print("  --bankrupt        Initiate the Bankruptcy declaration process")
+    print("  --help            Show this help message")
+
+
 def main(page: ft.Page):
     """
-    Main entry point for the Flet application.
-    Parses CLI arguments to route to the appropriate module.
+    Main entry point for the Flet application that routes to specific GUI modules.
 
-    Takes: page (ft.Page)
-    Gives: None
+    Takes:
+        page (ft.Page): The root page object provided by the Flet framework for UI rendering.
+
+    Gives:
+        None: Initializes and displays the requested module's view.
     """
     args = sys.argv[1:]
     
     if not args:
-        page.add(ft.Text("Welcome to Zennify! Use CLI arguments to open specific modules."))
         return
 
     mode = args[0]
@@ -41,23 +65,26 @@ def main(page: ft.Page):
     elif mode == "--shop":
         from core.shop.dashboard import ShopDashboard
         ShopDashboard(page).view()
-    elif mode == "--bankrupt":
-        print("WARNING: You are about to declare bankruptcy.")
-        print("This action is UNCHANGEABLE. You cannot go back.")
-        print("Your wallet coins will be set to 0 and your bankrupt count will increment by 1.")
-        try:
-            confirm = input("Type 'yes' to declare bankruptcy, or 'no' to cancel: ")
-            if confirm.strip().lower() == "yes":
-                from core.shared.wallet import WalletManager
-                WalletManager().declare_bankrupt()
-                print("Bankruptcy declared successfully. Your wallet has been reset.")
-            else:
-                print("Action cancelled.")
-        except EOFError:
-            print("\nError: Terminal input required for bankruptcy declaration.")
-    else:
-        page.add(ft.Text(f"Unknown mode: {mode}"))
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    args = sys.argv[1:]
+    
+    gui_modes = [
+        "--activity", 
+        "--activity-popup", 
+        "--flashcards", 
+        "--todos", 
+        "--pomodoro", 
+        "--shop"
+    ]
+    
+    if not args or args[0] == "--help":
+        show_help()
+    elif args[0] == "--bankrupt":
+        from core.shared.wallet import WalletManager
+        WalletManager().declare_bankrupt()
+    elif args[0] in gui_modes:
+        ft.run(main)
+    else:
+        show_help()

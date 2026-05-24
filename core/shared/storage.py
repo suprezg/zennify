@@ -6,20 +6,27 @@ Purpose: Handle all SQLite database creation, reading, and writing for the Zenni
 import sqlite3
 import os
 import json
-
+from core.shared.configurator import ConfigManager
 
 class StorageManager:
     """
-    Manages the SQLite database connection and operations.
+    Manages the SQLite database connection and operations for the application.
+    This class handles initialization, schema creation, and generic read/write operations.
     """
 
     def __init__(self, db_path=None):
         """
-        Initializes the database connection and tables.
-        If db_path is not provided, it reads from config.json.
+        Initializes the database connection and prepares tables.
+
+        Takes:
+            db_path (str, optional): The absolute path to the SQLite database file.
+                If None, the path is retrieved from the configuration manager.
+
+        Gives:
+            None: Initializes the instance attributes 'conn' and 'cursor'.
         """
         if db_path is None:
-            self.db_path = self._get_db_path_from_config()
+            self.db_path = ConfigManager().read_value("system","database_path")
         else:
             self.db_path = db_path
 
@@ -30,26 +37,15 @@ class StorageManager:
         if not db_exists:
             self._initialize_tables()
 
-    def _get_db_path_from_config(self):
-        """
-        Reads the database path from config.json.
-
-        Takes: None
-        Gives: str (path to database)
-        """
-        config_path = os.getenv("ZENNIFY_CONFIG_PATH")
-        if not config_path:
-            config_path = os.path.join(os.getcwd(), "config.json")
-            
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                config = json.load(f)
-                return config.get("system_config", {}).get("database_path", "zennify_storage.db")
-        return "zennify_storage.db"
-
     def _initialize_tables(self):
         """
-        Creates the necessary tables if they do not exist.
+        Creates the database schema and default records if they do not exist.
+
+        Takes:
+            None: Operates on the internal database connection.
+
+        Gives:
+            None: Executes the SQL schema and commits changes to the database.
         """
         schema = """
         CREATE TABLE IF NOT EXISTS activity (
@@ -107,20 +103,40 @@ class StorageManager:
 
     def read(self, query, params=()):
         """
-        Executes a SELECT query and returns all results.
+        Executes a database query to retrieve data.
+
+        Takes:
+            query (str): The SQL SELECT statement to execute.
+            params (tuple, optional): Parameters to bind to the query for safety.
+
+        Gives:
+            list: A list of tuples containing the result rows from the database.
         """
         self.cursor.execute(query, params)
         return self.cursor.fetchall()
 
     def write(self, query, params=()):
         """
-        Executes a DML query (INSERT, UPDATE, DELETE) and commits.
+        Executes a database query to modify data.
+
+        Takes:
+            query (str): The SQL statement (INSERT, UPDATE, DELETE) to execute.
+            params (tuple, optional): Parameters to bind to the query for safety.
+
+        Gives:
+            None: Commits the changes resulting from the query to the database.
         """
         self.cursor.execute(query, params)
         self.conn.commit()
 
     def close(self):
         """
-        Closes the database connection.
+        Closes the active database connection and cursor.
+
+        Takes:
+            None: Operates on the internal connection objects.
+
+        Gives:
+            None: Ensures the database connection is properly terminated.
         """
         self.conn.close()

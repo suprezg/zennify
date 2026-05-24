@@ -9,23 +9,30 @@ from core.shared.storage import StorageManager
 class WalletManager:
     """
     Manages the user's wallet, total coins, and bankruptcy state.
+    Provides methods to earn coins, check bankruptcy status, and reset the wallet.
     """
 
     def __init__(self):
         """
-        Initializes the WalletManager and connects to storage.
+        Initializes the WalletManager and establishes a connection to the storage service.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Operates on the internal storage manager instance.
+
+        Gives:
+            None: Initializes the 'storage' attribute.
         """
         self.storage = StorageManager()
 
     def earn_coins(self, amount):
         """
-        Updates the wallet's total coins. Prevents dropping below -75.
+        Updates the wallet's total coin balance, enforcing a minimum debt limit.
 
-        Takes: amount (int)
-        Gives: None
+        Takes:
+            amount (float/int): The number of coins to add to (or subtract from) the wallet.
+
+        Gives:
+            None: Updates the database record for the wallet.
         """
         records = self.storage.read("SELECT total_coins FROM wallet WHERE id = 1")
         if records:
@@ -37,23 +44,39 @@ class WalletManager:
 
     def declare_bankrupt(self):
         """
-        Resets wallet to 0 and increments bankruptcy count.
-        Note: The terminal interaction is handled in main.py, this method just updates DB.
+        Interactively prompts the user to reset their wallet and increment bankruptcy count.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Requires user interaction via terminal input.
+
+        Gives:
+            None: Updates the database and prints status messages to the console.
         """
-        records = self.storage.read("SELECT bankruptcy_count FROM wallet WHERE id = 1")
-        if records:
-            current_count = records[0][0]
-            self.storage.write("UPDATE wallet SET total_coins = 0, bankruptcy_count = ? WHERE id = 1", (current_count + 1,))
+        print("WARNING: You are about to declare bankruptcy.")
+        print("This action is UNCHANGEABLE. You cannot go back.")
+        print("Your wallet coins will be set to 0 and your bankrupt count will increment by 1.")
+        try:
+            confirm = input("Type 'yes' to declare bankruptcy, or 'no' to cancel: ")
+            if confirm.strip().lower() == "yes":
+                records = self.storage.read("SELECT bankruptcy_count FROM wallet WHERE id = 1")
+                if records:
+                    current_count = records[0][0]
+                    self.storage.write("UPDATE wallet SET total_coins = 0, bankruptcy_count = ? WHERE id = 1", (current_count + 1,))
+                print("Bankruptcy declared successfully. Your wallet has been reset.")
+            else:
+                print("Action cancelled.")
+        except EOFError:
+            print("\nError: Terminal input required for bankruptcy declaration.")
 
     def is_bankrupt(self):
         """
-        Checks if the wallet is in negative balance.
+        Checks the current balance to determine if the user is in a state of bankruptcy.
 
-        Takes: None
-        Gives: int (1 for positive/zero, -1 for negative)
+        Takes:
+            None: Queries the storage manager for the wallet's current balance.
+
+        Gives:
+            int: Returns -1 if the balance is negative, otherwise returns 1.
         """
         records = self.storage.read("SELECT total_coins FROM wallet WHERE id = 1")
         if records:
