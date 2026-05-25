@@ -6,43 +6,15 @@ Purpose: Logic and data management for the Flashcards feature using FSRS v6.
 import os
 import hashlib
 import datetime
+import io
+import base64
+import matplotlib
+import matplotlib.pyplot as plt
 from fsrs import Scheduler, Card, Rating
 from core.shared.storage import StorageManager
 from core.shared.configurator import ConfigManager
 
-
-class FlashcardStorage:
-    """
-    Handles database operations for flashcard records.
-    """
-
-    def __init__(self):
-        """
-        Initializes the storage manager.
-
-        Takes: None
-        Gives: None
-        """
-        self.storage = StorageManager()
-
-    def read_entries(self, query, params=()):
-        """
-        Executes a database read query.
-
-        Takes: query (str), params (tuple)
-        Gives: list of records
-        """
-        return self.storage.read(query, params)
-
-    def write_entries(self, query, params=()):
-        """
-        Executes a database write query.
-
-        Takes: query (str), params (tuple)
-        Gives: None
-        """
-        self.storage.write(query, params)
-
+matplotlib.use("agg")
 
 class FlashcardSettings:
     """
@@ -53,58 +25,95 @@ class FlashcardSettings:
         """
         Initializes the configuration manager.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Uses the default ConfigManager.
+
+        Gives:
+            None: Prepares the settings service.
         """
         self.config_manager = ConfigManager()
+
+    def get_folder_path(self):
+        """
+        Retrieves the flashcard folder path from the configuration.
+
+        Takes:
+            None: Uses the internal ConfigManager instance.
+
+        Gives:
+            str: The path to the flashcard folder.
+        """
+        return self.config_manager.read_value("flashcard", "folder_path")
+
 
     def change_folder(self, new_folder_path):
         """
         Updates the target folder and triggers a directory scan.
 
-        Takes: new_folder_path (str)
-        Gives: None
+        Takes:
+            new_folder_path (str): The new path for the flashcards folder.
+
+        Gives:
+            None: Updates the config and triggers a scan.
         """
         self.config_manager.update_value("flashcard", "folder_path", new_folder_path)
-        revision = FlashcardRevision()
-        revision.scan_folder()
+        FlashcardRevision().scan_folder()
 
 
 class FlashcardStatistics:
     """
-    Processes flashcard data for overview visualizations.
+    Processes and aggregates flashcard data for visualization on the overview screen.
     """
 
-    def __init__(self):
+    def __init__(self) :
         """
-        Initializes the storage and configuration managers.
+        Initializes the statistics service with storage and configuration managers.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Uses the default StorageManager and ConfigManager.
+
+        Gives:
+            None: Prepares the service for data processing.
         """
-        self.storage = FlashcardStorage()
+        self.storage = StorageManager()
         self.config_manager = ConfigManager()
 
-    def give_overview(self, deck_name="ALL"):
+    def _fig_to_base64(self, fig, bg_color) :
         """
-        Calculates analytics for global and specific decks.
+        Converts a Matplotlib figure into a base64 encoded string.
 
-        Takes: deck_name (str)
-        Gives: dict
+        Takes:
+            fig (plt.Figure): The Matplotlib figure object to convert.
+            bg_color (str): The background color for the saved figure.
+
+        Gives:
+            str: A base64 encoded PNG image string.
         """
-        # Fetch global data for top level stats
-        all_cards = self.storage.read_entries("SELECT stability, difficulty, state, next_review, last_review, deck_name FROM flashcard")
-        
-        # Global Metrics
+        buf = io.BytesIO()
+        fig.tight_layout(pad=1.5)
+        fig.savefig(buf, format="png", bbox_inches="tight", facecolor=bg_color, dpi=100)
+        plt.close(fig)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    def give_overview(self) :
+        """
+        Generates aggregated global statistics and pre-rendered charts for the overview screen.
+
+        Takes:
+            None: Processes all cards in the database.
+
+        Gives:
+            dict: A dictionary containing 'revised_count' and 'overview_data' (list of components).
+        """
+        all_cards = self.storage.read("SELECT stability, difficulty, state, next_review, last_review, deck_name FROM flashcard")
         
         now = datetime.datetime.now(datetime.timezone.utc)
         total_cards = len(all_cards)
         
-        # A card is considered revised if it has a non-null stability
         revised_cards = [c for c in all_cards if c[0] is not None]
         revised_count = len(revised_cards)
-        
-        # Calculate Retrievability (R = 0.9^(t/S)) and Active Knowledge (Sum of R)
+        has_enough_data = revised_count >= 5
+
         total_retrievability = 0
         sum_r_all = 0
         for c in all_cards:
@@ -116,31 +125,27 @@ class FlashcardStatistics:
                 lr = datetime.datetime.fromisoformat(last_review_str)
                 if lr.tzinfo is None: lr = lr.replace(tzinfo=datetime.timezone.utc)
                 t = max(0, (now - lr).days)
-                # Formula: R = 0.9^(t/S)
                 r = (0.9 ** (t / stability)) if stability > 0 else 0
                 total_retrievability += r
                 sum_r_all += r
             except (ValueError, TypeError, ZeroDivisionError):
                 continue
 
-        # Active Knowledge % = (Sum of Retrievability / Total Cards) * 100
         active_knowledge_pc = (sum_r_all / total_cards * 100) if total_cards > 0 else 0
-        # Retention Rate (Deck) = Average Retrievability of learned cards
         avg_retention = (total_retrievability / revised_count * 100) if revised_count > 0 else 0
         
-        # Difficulty Distribution Histogram
         diff_dist = {"Very Easy": 0, "Easy": 0, "Medium": 0, "Hard": 0, "Very Hard": 0}
         for c in all_cards:
-            if c[1] is None:
-                continue
-            d = c[1]
-            if d < 2: diff_dist["Very Easy"] += 1
-            elif d < 4: diff_dist["Easy"] += 1
-            elif d < 6: diff_dist["Medium"] += 1
-            elif d < 8: diff_dist["Hard"] += 1
-            else: diff_dist["Very Hard"] += 1
+            if c[1] is not None:
+                d = c[1]
+                if d < 2: diff_dist["Very Easy"] += 1
+                elif d < 4: diff_dist["Easy"] += 1
+                elif d < 6: diff_dist["Medium"] += 1
+                elif d < 8: diff_dist["Hard"] += 1
+                else: diff_dist["Very Hard"] += 1
+        
+        mode_diff = max(diff_dist.items(), key=lambda x: x[1])
 
-        # Review Forecast (Next 30 days)
         forecast = {}
         for i in range(30):
             day = (now + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
@@ -148,32 +153,23 @@ class FlashcardStatistics:
             
         for c in all_cards:
             try:
-                if not c[3]: continue
-                # Only forecast cards that have been revised (stability is not None)
-                if c[0] is None: continue
-                due = datetime.datetime.fromisoformat(c[3])
-                if due.tzinfo is None: due = due.replace(tzinfo=datetime.timezone.utc)
-                if now <= due <= (now + datetime.timedelta(days=30)):
-                    day = due.strftime("%Y-%m-%d")
-                    forecast[day] = forecast.get(day, 0) + 1
+                if c[0] is not None and c[3]:
+                    due = datetime.datetime.fromisoformat(c[3])
+                    if due.tzinfo is None: due = due.replace(tzinfo=datetime.timezone.utc)
+                    if now <= due <= (now + datetime.timedelta(days=30)):
+                        day = due.strftime("%Y-%m-%d")
+                        forecast[day] = forecast.get(day, 0) + 1
             except (ValueError, TypeError):
                 continue
-
-        # Deck Specific Metrics
-        deck_cards = all_cards if deck_name == "ALL" else [c for c in all_cards if c[5] == deck_name]
         
-        # Freshness Ratio (Using Stability & State)
+        next_rev_count = forecast[now.strftime("%Y-%m-%d")] if now.strftime("%Y-%m-%d") in forecast else 0
+
         freshness = {"New": 0, "Learning": 0, "Review": 0}
-        # Maturity buckets (Stability based)
         stability_buckets = {"New": 0, "Learning": 0, "Review": 0, "Mature": 0}
-        
         success_count = 0
-        reviewed_in_deck = 0
 
-        for c in deck_cards:
+        for c in all_cards:
             stability, difficulty, state, next_review_str, last_review_str, _ = c
-            
-            # Freshness
             if stability is None: 
                 freshness["New"] += 1
             elif state in (1, 3): 
@@ -182,45 +178,134 @@ class FlashcardStatistics:
                 freshness["Review"] += 1
             
             if stability is not None and stability > 0:
-                reviewed_in_deck += 1
-                # Retention/Success Estimate: Probability that R > 0.8
                 lr = datetime.datetime.fromisoformat(last_review_str)
                 if lr.tzinfo is None: lr = lr.replace(tzinfo=datetime.timezone.utc)
                 t = (now - lr).days
                 if (0.9 ** (t/stability)) > 0.8:
                     success_count += 1
             
-            # Memory Stability Buckets
             try:
                 if stability is None or not next_review_str or not last_review_str:
                     stability_buckets["New"] += 1
-                    continue
-                    
-                nr = datetime.datetime.fromisoformat(next_review_str)
-                lr = datetime.datetime.fromisoformat(last_review_str)
-                interval = (nr - lr).days
-                if interval <= 1: stability_buckets["New"] += 1
-                elif interval <= 7: stability_buckets["Learning"] += 1
-                elif interval <= 30: stability_buckets["Review"] += 1
-                else: stability_buckets["Mature"] += 1
+                else:
+                    nr = datetime.datetime.fromisoformat(next_review_str)
+                    lr = datetime.datetime.fromisoformat(last_review_str)
+                    interval = (nr - lr).days
+                    if interval <= 1: stability_buckets["New"] += 1
+                    elif interval <= 7: stability_buckets["Learning"] += 1
+                    elif interval <= 30: stability_buckets["Review"] += 1
+                    else: stability_buckets["Mature"] += 1
             except (ValueError, TypeError):
                 stability_buckets["New"] += 1
 
-        return {
-            "global": {
-                "active_knowledge": round(active_knowledge_pc, 1),
-                "difficulty_dist": list(diff_dist.items()) if sum(diff_dist.values()) > 0 else [("None", 1)],
-                "forecast": sorted(forecast.items()),
-                "revised_count": revised_count
+        success_rate = round(success_count / revised_count * 100, 1) if revised_count > 0 else 0
+        mature_count = stability_buckets["Mature"]
+        review_count = freshness["Review"]
+        rev_pc = round((review_count / total_cards * 100), 1) if total_cards > 0 else 0
+
+        bg_color = "#111418"
+        plt.rcParams.update({
+            "text.color": "white",
+            "axes.labelcolor": "white",
+            "xtick.color": "white",
+            "ytick.color": "white",
+            "axes.edgecolor": "white",
+        })
+
+        fig1, ax1 = plt.subplots(figsize=(7, 4))
+        ax1.set_facecolor(bg_color)
+        if has_enough_data:
+            labels, counts = zip(*diff_dist.items())
+            ax1.bar(labels, counts, color="#42A5F5")
+        else:
+            ax1.text(0.5, 0.5, "Not Enough Data", ha='center', va='center', color="white")
+        chart1_base64 = self._fig_to_base64(fig1, bg_color)
+
+        fig2, ax2 = plt.subplots(figsize=(7, 4))
+        ax2.set_facecolor(bg_color)
+        if has_enough_data:
+            s_labels, s_counts = zip(*stability_buckets.items())
+            ax2.bar(s_labels, s_counts, color="#26C6DA")
+        else:
+            ax2.text(0.5, 0.5, "Not Enough Data", ha='center', va='center', color="white")
+        chart2_base64 = self._fig_to_base64(fig2, bg_color)
+
+        fig3, ax3 = plt.subplots(figsize=(7, 4))
+        ax3.set_facecolor(bg_color)
+        if has_enough_data:
+            f_sorted = sorted(forecast.items())
+            f_dates, f_counts = zip(*f_sorted)
+            f_short_dates = [d[-5:] for d in f_dates]
+            ax3.plot(f_short_dates, f_counts, color="#FFCA28", marker="o", linewidth=2)
+            for i, t in enumerate(ax3.get_xticklabels()):
+                if i % 5 != 0: t.set_visible(False)
+        else:
+            ax3.text(0.5, 0.5, "Not Enough Data", ha='center', va='center', color="white")
+        chart3_base64 = self._fig_to_base64(fig3, bg_color)
+
+        fig4, ax4 = plt.subplots(figsize=(7, 4))
+        ax4.set_facecolor(bg_color)
+        p_data = [(l, c) for l, c in freshness.items() if c > 0]
+        if has_enough_data and p_data:
+            p_labels, p_counts = zip(*p_data)
+            ax4.pie(p_counts, labels=p_labels, autopct='%1.1f%%', colors=["#66BB6A", "#FFA726", "#EF5350"], textprops={'color':"w"})
+        else:
+            ax4.text(0.5, 0.5, "Not Enough Data", ha='center', va='center', color="white")
+        chart4_base64 = self._fig_to_base64(fig4, bg_color)
+
+        overview_data = [
+            {
+                "title": "Active Knowledge",
+                "type": "text",
+                "value": f"{round(active_knowledge_pc, 1)}%" if has_enough_data else "N/A",
+                "explanation": "Active Knowledge represents the estimated amount of information you can recall at this exact moment. It is calculated using the FSRS algorithm, which determines the probability of recall for every card in your collection. Unlike total card count, this metric weights each card by its current 'retrievability', giving you a realistic measure of your true knowledge volume.",
+                "insight": f"You are currently effectively retaining {round(active_knowledge_pc, 1)}% of your entire knowledge base." if has_enough_data else "Complete more revisions to calculate knowledge retention."
             },
-            "deck": {
-                "success_rate": round(success_count / reviewed_in_deck * 100, 1) if reviewed_in_deck > 0 else 0,
-                "freshness": list(freshness.items()),
-                "retention_rate": round(avg_retention, 1),
-                "stability": list(stability_buckets.items()),
+            {
+                "title": "Success Rate",
+                "type": "text",
+                "value": f"{success_rate}%" if has_enough_data else "N/A",
+                "explanation": "The Success Rate provides a real-time prediction of your performance. It estimates the percentage of your active cards that you would correctly answer if you were tested right now. This is based on the decay of memory over time; as cards approach their due date, their success probability drops, reflecting the overall health of your immediate recall.",
+                "insight": f"Based on your memory stability, you are likely to recall {success_rate}% of your active cards." if has_enough_data else "Insufficient revision history to estimate recall success."
             },
-            "available_decks": sorted(list(set(c[5] for c in all_cards)))
-        }
+            {
+                "title": "Retention Rate",
+                "type": "text",
+                "value": f"{round(avg_retention, 1)}%" if has_enough_data else "N/A",
+                "explanation": "Retention Rate measures the average retrievability of all cards you have already learned. In spaced repetition, optimal retention is usually around 90%. If this number is very high, you may be over-studying and seeing cards too often; if it is low, you are forgetting too much. This helps you balance memory strength with time efficiency.",
+                "insight": f"Your average memory strength for learned material is currently at {round(avg_retention, 1)}%." if has_enough_data else "Study more cards to establish a baseline retention rate."
+            },
+            {
+                "title": "Ease Factor Distribution",
+                "type": "chart",
+                "image_base64": chart1_base64,
+                "explanation": "The Ease Factor distribution shows the complexity profile of your flashcard collection. FSRS assigns a difficulty value to each card based on your past ratings. This histogram helps you identify if your deck consists mostly of mastered concepts or if you are struggling with 'Hard' cards that require more cognitive effort.",
+                "insight": f"Your most common difficulty level is '{mode_diff[0]}' with {mode_diff[1]} cards." if has_enough_data else "No difficulty distribution data available."
+            },
+            {
+                "title": "Memory Stability (Strength)",
+                "type": "chart",
+                "image_base64": chart2_base64,
+                "explanation": "Memory Stability represents the 'strength' of your long-term memory. It is the estimated time (in days) it takes for your recall probability to drop to 90%. Mature cards have very high stability, meaning they are deeply consolidated and will not need to be reviewed for months or even years.",
+                "insight": f"You have {mature_count} mature cards established in your long-term memory." if has_enough_data else "Stability metrics require at least 5 card revisions."
+            },
+            {
+                "title": "30-Day Review Forecast",
+                "type": "chart",
+                "image_base64": chart3_base64,
+                "explanation": "The 30-Day Review Forecast is a predictive tool that calculates exactly when each card in your collection will next become due. By analyzing the stability of every card, it projects your upcoming workload day-by-day, allowing you to anticipate 'review spikes' and plan your study sessions in advance.",
+                "insight": f"You have {next_rev_count} cards scheduled for your next review session." if has_enough_data else "Forecast will be available after your first revisions."
+            },
+            {
+                "title": "Card Status Distribution",
+                "type": "chart",
+                "image_base64": chart4_base64,
+                "explanation": "This chart visualizes the lifecycle of your learning process. Cards move from 'New' (unseen) to 'Learning' (initial acquisition) and eventually to 'Review' (established knowledge). A healthy distribution shows a steady flow of cards into the Review phase, indicating successful long-term retention.",
+                "insight": f"Currently, {rev_pc}% of your deck has successfully reached the long-term Review phase." if has_enough_data else "Revise cards to move them through status phases."
+            }
+        ]
+
+        return {"revised_count": revised_count, "overview_data": overview_data}
 
 
 class FlashcardRevision:
@@ -232,10 +317,13 @@ class FlashcardRevision:
         """
         Initializes the revision services and FSRS scheduler.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Initializes the required managers and scheduler.
+
+        Gives:
+            None: Prepares the revision service.
         """
-        self.storage = FlashcardStorage()
+        self.storage = StorageManager()
         self.config_manager = ConfigManager()
         self.sch = Scheduler()
 
@@ -243,15 +331,18 @@ class FlashcardRevision:
         """
         Scans the Directory and updates the flashcard table in database.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Uses the configured folder path.
+
+        Gives:
+            None: Updates the database with discovered flashcards.
         """
         import re
         folder_path = self.config_manager.read_value("flashcard", "folder_path")
         if not folder_path or not os.path.exists(folder_path):
             return
 
-        existing_cards = self.storage.read_entries("SELECT card_id, content_hash FROM flashcard")
+        existing_cards = self.storage.read("SELECT card_id, content_hash FROM flashcard")
         existing_map = {row[0]: row[1] for row in existing_cards}
         
         discovered_ids = set()
@@ -268,13 +359,11 @@ class FlashcardRevision:
                     except Exception:
                         continue
 
-                    # Robustly extract frontmatter and body
                     match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)', content, re.DOTALL)
                     if not match:
                         continue
                     frontmatter, body = match.groups()
                     
-                    # Search for tags in frontmatter
                     tags_match = re.search(r'^tags:\s*(.*)', frontmatter, re.MULTILINE | re.IGNORECASE)
                     if not tags_match:
                         continue
@@ -282,7 +371,6 @@ class FlashcardRevision:
                     if 'flashcards' not in tags_line:
                         continue
 
-                    # Split by heading taking care of newlines so we don't match internal '#' inside answers
                     parts = re.split(r'\n#\s+', '\n' + body)
                     for part in parts[1:]:
                         lines = part.strip().split("\n")
@@ -300,14 +388,14 @@ class FlashcardRevision:
 
                         if id_hash in existing_map:
                             if existing_map[id_hash] != content_hash:
-                                self.storage.write_entries(
+                                self.storage.write(
                                     "UPDATE flashcard SET content_hash = ?, deck_name = ? WHERE card_id = ?",
                                     (content_hash, deck_name, id_hash)
                                 )
                         else:
                             now = datetime.datetime.now(datetime.timezone.utc)
                             card = Card()
-                            self.storage.write_entries(
+                            self.storage.write(
                                 """INSERT INTO flashcard (
                                     card_id, content_hash, deck_name, stability, difficulty, 
                                     state, next_review, last_review
@@ -320,14 +408,17 @@ class FlashcardRevision:
         
         for old_id in existing_map.keys():
             if old_id not in discovered_ids:
-                self.storage.write_entries("DELETE FROM flashcard WHERE card_id = ?", (old_id,))
+                self.storage.write("DELETE FROM flashcard WHERE card_id = ?", (old_id,))
 
     def revise_deck(self, deck_name):
         """
         Gets cards which are up for revision.
 
-        Takes: deck_name (str)
-        Gives: list
+        Takes:
+            deck_name (str): The name of the deck to revise, or "all" for all decks.
+
+        Gives:
+            list: A list of dictionaries containing card information.
         """
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         if deck_name.lower() == "all":
@@ -337,7 +428,7 @@ class FlashcardRevision:
             query = "SELECT card_id, deck_name FROM flashcard WHERE deck_name = ? AND next_review <= ?"
             params = (deck_name, now)
             
-        pending_records = self.storage.read_entries(query, params)
+        pending_records = self.storage.read(query, params)
         if not pending_records:
             return []
             
@@ -385,10 +476,14 @@ class FlashcardRevision:
         """
         Updates the card values using FSRS v6.
 
-        Takes: card_id (str), rating_val (int)
-        Gives: None
+        Takes:
+            card_id (str): The unique identifier of the flashcard.
+            rating_val (int): The rating provided by the user.
+
+        Gives:
+            None: Updates the card scheduling data in the database.
         """
-        card_data = self.storage.read_entries(
+        card_data = self.storage.read(
             "SELECT stability, difficulty, state, last_review FROM flashcard WHERE card_id = ?", 
             (card_id,)
         )
@@ -413,7 +508,7 @@ class FlashcardRevision:
         
         new_card, review_log = self.sch.review_card(card, rating, now)
         
-        self.storage.write_entries(
+        self.storage.write(
             """UPDATE flashcard SET 
                 stability = ?, difficulty = ?, state = ?, next_review = ?, last_review = ? 
                WHERE card_id = ?""",
@@ -422,3 +517,21 @@ class FlashcardRevision:
                 new_card.due.isoformat(), now.isoformat(), card_id
             )
         )
+
+    def get_deck_stats(self):
+        """
+        Retrieves counts of pending cards per deck.
+
+        Takes:
+            None: Queries the database for pending revisions.
+
+        Gives:
+            tuple: A dictionary of pending counts per deck and the total count.
+        """
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        cards = self.storage.read("SELECT deck_name FROM flashcard WHERE next_review <= ?", (now,))
+        deck_counts = {}
+        for card in cards:
+            deck = card[0]
+            deck_counts[deck] = deck_counts.get(deck, 0) + 1
+        return deck_counts, len(cards)
