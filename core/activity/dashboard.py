@@ -260,17 +260,7 @@ class ActivityDashboard:
             spacing=50
         )
 
-        period_input = ft.TextField(
-            label="Filter (mm/yyyy)",
-            value=f"{self.current_month}/{self.current_year}",
-            hint_text="05/2026",
-            width=180,
-            text_align=ft.TextAlign.CENTER
-        )
-
-        charts_container = ft.Column(visible=False, expand=True, spacing=40)
-        spacer_mid = ft.Container(expand=True)
-        spacer_bottom = ft.Container(expand=True)
+        charts_container = ft.Column(expand=True, spacing=40)
 
         def row_builder(title, visual_content, explanation, insight):
             """
@@ -304,68 +294,23 @@ class ActivityDashboard:
                 )
             ], vertical_alignment=ft.CrossAxisAlignment.START, spacing=20)
 
-        def show_overview(e):
-            """
-            Generates and displays overview charts for the selected period.
+        overview_data = self.stats_service.give_overview()
 
-            Takes:
-                e (ft.ControlEvent): The event object from the 'Show' button click.
-
-            Gives:
-                None: Updates charts_container and refreshes the page.
-            """
-            spacer_mid.visible = False
-            spacer_bottom.visible = False
-
-            try:
-                period = period_input.value.strip()
-                if "/" not in period:
-                    raise ValueError
-                month, year = period.split("/")
-                if not (month.isdigit() and 1 <= int(month) <= 12 and year.isdigit() and len(year) == 4):
-                    raise ValueError
-            except ValueError:
-                self.page.snack_bar = ft.SnackBar(ft.Text("Please enter period as mm/yyyy (e.g., 05/2026)"))
-                self.page.snack_bar.open = True
-                self.page.update()
-                return
-
-            charts_container.controls.clear()
-            overview_data = self.stats_service.give_overview(month, year)
-
-            rows = []
-            for item in overview_data:
-                rows.append(
-                    row_builder(
-                        item["title"],
-                        ft.Image(src=item["image_base64"], height=300, fit=ft.BoxFit.CONTAIN),
-                        item["explanation"],
-                        item["insight"]
-                    )
+        for item in overview_data:
+            charts_container.controls.append(
+                row_builder(
+                    item["title"],
+                    ft.Image(src=item["image_base64"], height=300, fit=ft.BoxFit.CONTAIN),
+                    item["explanation"],
+                    item["insight"]
                 )
-
-            charts_container.controls.extend(rows)
-            charts_container.visible = True
-            self.page.update()
-            return
-
-        show_button = ft.Button("Show", on_click=show_overview, height=50)
-
-        picker_row = ft.Row(
-            [ft.Text("Filter:", size=16), period_input, show_button],
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=20
-        )
+            )
 
         return ft.Column(
             [
                 ft.Container(content=metrics_row, padding=20),
                 ft.Divider(height=1, color=ft.Colors.GREY_800),
-                spacer_mid,
-                ft.Container(content=picker_row, padding=20),
-                ft.Divider(height=1, color=ft.Colors.TRANSPARENT),
-                charts_container,
-                spacer_bottom
+                charts_container
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             expand=True,

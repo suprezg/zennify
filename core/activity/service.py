@@ -290,20 +290,18 @@ class ActivityStatistics:
         plt.close(fig)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
 
-    def give_overview(self, month, year) :
+    def give_overview(self) :
         """
         Generates aggregated statistics and pre-rendered charts for the overview screen.
 
         Takes:
-            month (str): The month to analyze (e.g., '05').
-            year (str): The year to analyze (e.g., '2026').
+            None: Analyzes all records in the activity table.
 
         Gives:
             list: A list of dictionaries containing chart titles, images, explanations, and insights.
         """
-        pattern = f"{year}-{month}-%"
-        query = "SELECT * FROM activity WHERE date LIKE ? ORDER BY date ASC, start_time ASC"
-        entries = self.storage.read(query, (pattern,))
+        query = "SELECT * FROM activity ORDER BY date ASC, start_time ASC"
+        entries = self.storage.read(query)
 
         productive_count = sum(1 for e in entries if e[6])
         unproductive_count = len(entries) - productive_count
@@ -377,7 +375,7 @@ class ActivityStatistics:
                 "title": "Productivity Ratio",
                 "image_base64": chart1_base64,
                 "explanation": "This chart shows the balance between your productive and unproductive sessions. It gives a quick glance at how effectively you're spending your logged time.",
-                "insight": f"Your productivity ratio for this month is {prod_pc}%."
+                "insight": f"Your productivity ratio overall is {prod_pc}%."
             },
             {
                 "title": "Activity Mix (Top 5)",
@@ -389,7 +387,7 @@ class ActivityStatistics:
                 "title": "Detailed Tag Frequency",
                 "image_base64": chart3_base64,
                 "explanation": "This bar chart provides a detailed breakdown of all your activity tags by their frequency of use, highlighting where your time is being invested the most.",
-                "insight": f"You have tracked {len(top_tags)} different activities this month."
+                "insight": f"You have tracked {len(top_tags)} different activities overall."
             }
         ]
 
