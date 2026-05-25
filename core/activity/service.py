@@ -21,7 +21,7 @@ class ActivityOverlay:
     Handles data retrieval and persistence for the activity logging popup.
     """
 
-    def __init__(self) :
+    def __init__(self):
         """
         Initializes the storage manager for the activity overlay.
 
@@ -33,7 +33,7 @@ class ActivityOverlay:
         """
         self.storage = StorageManager()
 
-    def get_recent_tags(self) :
+    def get_recent_tags(self):
         """
         Retrieves unique tags previously used in activities for selection in the popup.
 
@@ -47,7 +47,7 @@ class ActivityOverlay:
         rows = self.storage.read(query)
         return [row[0] for row in rows]
 
-    def get_last_entry(self) :
+    def get_last_entry(self):
         """
         Retrieves the most recent activity entry to calculate streaks and multipliers.
 
@@ -61,7 +61,7 @@ class ActivityOverlay:
         rows = self.storage.read(query)
         return rows[0] if rows else None
 
-    def write_entry(self, date, start_time, end_time, description, tag, is_productive, retribution) :
+    def write_entry(self, date, start_time, end_time, description, tag, is_productive, retribution):
         """
         Writes a new activity entry to the database.
 
@@ -89,7 +89,7 @@ class ActivitySettings:
     Manages configuration settings and systemd integration for the activity module.
     """
 
-    def __init__(self) :
+    def __init__(self):
         """
         Initializes the settings service with a configuration manager.
 
@@ -101,7 +101,7 @@ class ActivitySettings:
         """
         self.config_manager = ConfigManager()
 
-    def _generate_systemd_files(self) :
+    def _generate_systemd_files(self):
         """
         Regenerates the systemd service and timer files based on current configuration.
 
@@ -150,7 +150,7 @@ WantedBy=timers.target
             except subprocess.CalledProcessError:
                 pass
 
-    def toggle_service(self, enable) :
+    def toggle_service(self, enable):
         """
         Enables or disables the background systemd timer for activity logging.
 
@@ -167,7 +167,7 @@ WantedBy=timers.target
         except subprocess.CalledProcessError:
             pass
 
-    def change_popup_interval_timer(self, new_interval) :
+    def change_popup_interval_timer(self, new_interval):
         """
         Updates the popup interval timer and regenerates associated systemd files.
 
@@ -186,7 +186,7 @@ WantedBy=timers.target
             except subprocess.CalledProcessError:
                 pass
 
-    def change_popup_visible_timer(self, new_timer) :
+    def change_popup_visible_timer(self, new_timer):
         """
         Updates the minimum visible time for the activity popup.
 
@@ -198,7 +198,7 @@ WantedBy=timers.target
         """
         self.config_manager.update_value("activity", "popup_visible_timer", new_timer)
 
-    def get_service_details(self) :
+    def get_service_details(self):
         """
         Retrieves current systemd service configuration paths and status.
 
@@ -213,7 +213,7 @@ WantedBy=timers.target
         service_status = self.config_manager.read_value("activity", "service_status")
         return [service_path, timer_path, service_status]
 
-    def get_timer_details(self) :
+    def get_timer_details(self):
         """
         Retrieves current timer settings for the activity popup.
 
@@ -227,7 +227,7 @@ WantedBy=timers.target
         popup_visible_timer = self.config_manager.read_value("activity", "popup_visible_timer")
         return [popup_interval_timer, popup_visible_timer]
 
-    def get_streak_data(self) :
+    def get_streak_data(self):
         """
         Retrieves current user streak and multiplier data.
 
@@ -241,7 +241,7 @@ WantedBy=timers.target
         multiplier = self.config_manager.read_value("activity", "multiplier")
         return [streak, multiplier]
 
-    def update_streak_data(self, streak, multiplier) :
+    def update_streak_data(self, streak, multiplier):
         """
         Updates the user's activity streak and reward multiplier in the configuration.
 
@@ -261,7 +261,7 @@ class ActivityStatistics:
     Processes and aggregates activity data for visualization on the overview screen.
     """
 
-    def __init__(self) :
+    def __init__(self):
         """
         Initializes the statistics service with an activity storage manager.
 
@@ -273,7 +273,7 @@ class ActivityStatistics:
         """
         self.storage = StorageManager()
 
-    def _fig_to_base64(self, fig, bg_color) :
+    def _fig_to_base64(self, fig, bg_color):
         """
         Converts a Matplotlib figure into a base64 encoded string for Flet display.
 
@@ -290,7 +290,7 @@ class ActivityStatistics:
         plt.close(fig)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
 
-    def give_overview(self) :
+    def give_overview(self):
         """
         Generates aggregated statistics and pre-rendered charts for the overview screen.
 
@@ -397,7 +397,7 @@ class ActivityReview:
     Prepares activity data for the heatmap and daily review screens.
     """
 
-    def __init__(self) :
+    def __init__(self):
         """
         Initializes the review service with a storage manager.
 
@@ -409,7 +409,7 @@ class ActivityReview:
         """
         self.storage = StorageManager()
 
-    def get_heatmap(self, month, year) :
+    def get_heatmap(self, month, year):
         """
         Calculates activity frequency per day for the heatmap visualization.
 
@@ -429,7 +429,7 @@ class ActivityReview:
             heatmap_data[day] = heatmap_data.get(day, 0) + 1
         return heatmap_data
 
-    def get_activity(self, date) :
+    def get_activity(self, date):
         """
         Retrieves all activity logs for a specific calendar date.
 

@@ -21,10 +21,10 @@ class ActivityPopup:
         Initializes the activity popup with the necessary services and UI components.
 
         Takes:
-            page (ft.Page): The root page object for rendering the popup.
+          page (ft.Page): The root page object for rendering the popup.
 
         Gives:
-            None: Initializes instance attributes and configures initial UI state.
+          None.
         """
         self.page = page
         self.settings_service = ActivitySettings()
@@ -65,10 +65,10 @@ class ActivityPopup:
         Configures the window properties and displays the activity logging interface.
 
         Takes:
-            None: Operates on the internal 'page' attribute.
+          None.
 
         Gives:
-            None: Cleans the page, adds UI controls, and starts the countdown task.
+          None.
         """
         self.page.title = "Zennify - Log Activity"
         self.page.theme_mode = ft.ThemeMode.DARK
@@ -118,10 +118,10 @@ class ActivityPopup:
         Handles the visual countdown and triggers automatic submission upon timeout.
 
         Takes:
-            None: Uses the 'visible_seconds' attribute.
+          None.
 
         Gives:
-            None: Updates the UI timer text and eventually calls _submit().
+          None.
         """
         remaining = self.visible_seconds
         while remaining > 0:
@@ -138,10 +138,10 @@ class ActivityPopup:
         Processes the activity data, calculates rewards, and persists the entry.
 
         Takes:
-            auto (bool): If True, indicates a timeout submission with default 'Inactive' values.
+          auto (bool): If True, indicates a timeout submission with default 'Inactive' values.
 
         Gives:
-            None: Writes to the database, updates wallet/streak, and closes the window.
+          None.
         """
         if auto:
             description = "Inactive"
@@ -149,7 +149,29 @@ class ActivityPopup:
             is_productive = False
         else:
             description = self.description_input.value or "No description"
-            tag = self.new_tag_input.value or self.tag_dropdown.value or "None"
+            tag = (self.new_tag_input.value or "").strip() or self.tag_dropdown.value
+            
+            if not tag:
+                def close_dialog(e):
+                    """
+                    Closes the alert dialog.
+
+                    Takes:
+                      e (ft.ControlEvent): The event object.
+
+                    Gives:
+                      None.
+                    """
+                    self.page.pop_dialog()
+
+                dialog = ft.AlertDialog(
+                    title=ft.Text("Tag Required"),
+                    content=ft.Text("Please select an existing tag or enter a new one to log your activity."),
+                    actions=[ft.TextButton("OK", on_click=close_dialog)]
+                )
+                self.page.show_dialog(dialog)
+                return
+
             is_productive = self.productivity_radio.value == "productive"
 
         streak, multiplier = self.settings_service.get_streak_data()
@@ -189,10 +211,10 @@ class ActivityPopup:
         Converts human-readable timer strings into an integer representing seconds.
 
         Takes:
-            timer_str (str): A string representing time duration (e.g., '30m', '1h').
+          timer_str (str): A string representing time duration (e.g., '30m', '1h').
 
         Gives:
-            int: The equivalent duration in seconds.
+          int: The equivalent duration in seconds.
         """
         try:
             val = int(timer_str[:-1])
