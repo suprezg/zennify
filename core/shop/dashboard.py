@@ -5,6 +5,7 @@ Purpose: User interface for the Shop feature.
 
 import flet as ft
 from core.shop.service import ShopMain
+from core.shared.wallet import WalletManager
 
 
 class ShopDashboard:
@@ -16,19 +17,24 @@ class ShopDashboard:
         """
         Initializes the dashboard with the Flet page.
 
-        Takes: page (ft.Page)
-        Gives: None
+        Takes:
+          page (ft.Page): The Flet page instance.
+
+        Gives:
+          None.
         """
         self.page = page
         self.shop_service = ShopMain()
-        self.view_mode = "grid" # Default view mode
-
+        self.view_mode = "grid"
     def view(self):
         """
         Builds and displays the main view for the shop.
 
-        Takes: None
-        Gives: None
+        Takes:
+          None.
+
+        Gives:
+          None.
         """
         self.page.title = "Zennify - Reward Shop"
         self.page.theme_mode = ft.ThemeMode.DARK
@@ -36,12 +42,11 @@ class ShopDashboard:
         self.page.window.min_height = 600
         self.page.clean()
 
-        # Fetch initial data
+
         wallet_details = self.shop_service.give_wallet_details()
         coins, bankruptcies = wallet_details
-        items = self.shop_service.storage.read_entries("SELECT * FROM shop ORDER BY item_id DESC")
+        items = self.shop_service.get_items()
 
-        # --- 1. Header (Wallet Details) ---
         header = ft.Container(
             content=ft.Row([
                 ft.Row([
@@ -56,40 +61,6 @@ class ShopDashboard:
             padding=30
         )
 
-        # --- 2. Bankruptcy Alert Box ---
-        alert_box = ft.Container()
-        if coins <= -75:
-            def on_declare_click(e):
-                def confirm_bankruptcy(e):
-                    self.shop_service.declare_bankrupt()
-                    self.page.pop_dialog()
-                    self.view()
-
-                dialog = ft.AlertDialog(
-                    modal=True,
-                    title=ft.Text("Confirm Bankruptcy"),
-                    content=ft.Text("By declaring yourself bankrupt, you are resetting all your streaks and making your total coins 0. This cannot be undone."),
-                    actions=[
-                        ft.TextButton("Cancel", on_click=lambda _: self.page.pop_dialog()),
-                        ft.ElevatedButton("Okay", on_click=confirm_bankruptcy, bgcolor=ft.Colors.RED, color=ft.Colors.WHITE)
-                    ],
-                    actions_alignment=ft.MainAxisAlignment.END
-                )
-                self.page.show_dialog(dialog)
-
-            alert_box = ft.Container(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, color=ft.Colors.RED_ACCENT),
-                    ft.Text("You have hit the lowest limit of negative 75 coins. Do you want to declare yourself bankrupt?", color=ft.Colors.RED_100, expand=True),
-                    ft.ElevatedButton("Declare", on_click=on_declare_click, bgcolor=ft.Colors.RED_700, color=ft.Colors.WHITE)
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                padding=20,
-                border=ft.Border.all(2, ft.Colors.RED_700),
-                border_radius=10,
-                margin=ft.Margin.only(bottom=20)
-            )
-
-        # --- 3. Create Item Section ---
         item_name_input = ft.TextField(label="Reward Name", expand=True, hint_text="e.g., Watch a movie")
         item_cost_dropdown = ft.Dropdown(
             label="Cost",
@@ -99,6 +70,15 @@ class ShopDashboard:
         )
 
         def add_item(e):
+            """
+            Adds a new custom item to the shop.
+
+            Takes:
+              e (ft.ControlEvent): The event object.
+
+            Gives:
+              None.
+            """
             if item_name_input.value:
                 self.shop_service.add_item(item_name_input.value, int(item_cost_dropdown.value))
                 self.view()
@@ -116,8 +96,16 @@ class ShopDashboard:
             margin=ft.Margin.only(bottom=20)
         )
 
-        # --- 4. Inventory List/Grid ---
         def toggle_view(e):
+            """
+            Toggles between grid and list view modes.
+
+            Takes:
+              e (ft.ControlEvent): The event object.
+
+            Gives:
+              None.
+            """
             self.view_mode = "grid" if self.view_mode == "list" else "list"
             self.view()
 
@@ -128,7 +116,27 @@ class ShopDashboard:
         )
 
         def buy_item(item_id, name, cost):
+            """
+            Processes an item purchase confirmation.
+
+            Takes:
+              item_id (int): The ID of the item.
+              name (str): The name of the item.
+              cost (int): The cost of the item.
+
+            Gives:
+              None.
+            """
             def confirm_buy(e):
+                """
+                Confirms the purchase and updates the UI.
+
+                Takes:
+                  e (ft.ControlEvent): The event object.
+
+                Gives:
+                  None.
+                """
                 if self.shop_service.buy_item(item_id, cost):
                     self.page.pop_dialog()
                     self.view()
@@ -149,7 +157,26 @@ class ShopDashboard:
             self.page.show_dialog(dialog)
 
         def remove_item(item_id, name):
+            """
+            Processes an item removal confirmation.
+
+            Takes:
+              item_id (int): The ID of the item.
+              name (str): The name of the item.
+
+            Gives:
+              None.
+            """
             def confirm_remove(e):
+                """
+                Confirms the removal and updates the UI.
+
+                Takes:
+                  e (ft.ControlEvent): The event object.
+
+                Gives:
+                  None.
+                """
                 self.shop_service.remove_item(item_id)
                 self.page.pop_dialog()
                 self.view()
@@ -164,7 +191,6 @@ class ShopDashboard:
             )
             self.page.show_dialog(dialog)
 
-        # Items Rendering
         inventory_controls = []
         for item in items:
             iid, name, cost, count = item
@@ -205,12 +231,10 @@ class ShopDashboard:
             expand=True
         )
 
-        # Assemble Main Layout
         self.page.add(
             ft.Container(
                 content=ft.Column([
                     header,
-                    alert_box,
                     create_section,
                     inventory_container
                 ], scroll=ft.ScrollMode.AUTO),
@@ -218,3 +242,11 @@ class ShopDashboard:
                 expand=True
             )
         )
+        
+        if WalletManager().is_bankrupt() == -1:
+            dialog = ft.AlertDialog(
+                title=ft.Text("Wallet Warning"),
+                content=ft.Text("Your wallet balance is currently negative. You can try to recover by being more productive or declare bankruptcy by running 'zennify.sh --bankrupt' in your terminal."),
+                actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
+            )
+            self.page.show_dialog(dialog)
