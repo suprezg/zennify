@@ -8,39 +8,40 @@ import io
 import base64
 import asyncio
 import flet as ft
-import matplotlib
-import matplotlib.pyplot as plt
 from core.pomodoro.service import PomodoroTimer, PomodoroSettings, PomodoroStatistics
-from core.shared.wallet import WalletManager
-
-matplotlib.use("agg")
 
 
 class PomodoroDashboard:
     """
     Main dashboard class for the Pomodoro feature.
+    Manages the user interface for the timer, statistics overview, and settings configuration.
     """
 
     def __init__(self, page):
         """
-        Initializes the dashboard with the Flet page and services.
+        Initializes the dashboard with the Flet page and necessary service instances.
 
-        Takes: page (ft.Page)
-        Gives: None
+        Takes:
+          page (ft.Page): The root page object for rendering the Flet application.
+
+        Gives:
+          None.
         """
         self.page = page
         self.timer_service = PomodoroTimer()
         self.settings_service = PomodoroSettings()
         self.stats_service = PomodoroStatistics()
-        self.wallet_manager = WalletManager()
         self.timer_running = False
 
     def view(self, selected_index=0):
         """
-        Builds and displays the main view for the pomodoro dashboard.
+        Builds and displays the main tabbed view for the Pomodoro dashboard.
 
-        Takes: selected_index (int)
-        Gives: None
+        Takes:
+          selected_index (int): The index of the tab to be selected upon loading (default is 0).
+
+        Gives:
+          None.
         """
         self.page.title = "Zennify - Pomodoro Timer"
         self.page.theme_mode = ft.ThemeMode.DARK
@@ -77,28 +78,27 @@ class PomodoroDashboard:
 
         self.page.add(tabs)
 
-        if self.wallet_manager.is_bankrupt() == -1:
-            dialog = ft.AlertDialog(
-                title=ft.Text("Wallet Warning"),
-                content=ft.Text("Your wallet balance is currently negative. You can try to recover by being more productive or declare bankruptcy by running 'zennify.sh --bankrupt' in your terminal."),
-                actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
-            )
-            self.page.show_dialog(dialog)
-
     def _timer_tab(self):
         """
-        Builds the Timer tab UI.
+        Builds the Timer tab UI, providing visual feedback and controls for Pomodoro sessions.
 
-        Takes: None
-        Gives: ft.Column
+        Takes:
+          None.
+
+        Gives:
+          ft.Column: A column control containing the info box, phase label, timer text, and action buttons.
         """
-        config = self.settings_service.read_config()
+        config = self.settings_service.get_preset()
         state = self.timer_service.get_current_state()
         
+        def format_seconds(seconds):
+            mins, secs = divmod(seconds, 60)
+            return f"{int(mins):02d}:{int(secs):02d}"
+
+
         phase_label = ft.Text(state["phase"], size=32, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_200)
-        timer_text = ft.Text(self._format_seconds(state["remaining_seconds"]), size=80, weight=ft.FontWeight.BOLD)
+        timer_text = ft.Text(format_seconds(state["remaining_seconds"]), size=80, weight=ft.FontWeight.BOLD)
         
-        # Info Box
         info_box = ft.Container(
             content=ft.Column([
                 ft.Text("CURRENT PRESETS", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
@@ -118,16 +118,14 @@ class PomodoroDashboard:
         async def update_timer():
             while True:
                 state = self.timer_service.get_current_state()
-                timer_text.value = self._format_seconds(state["remaining_seconds"])
+                timer_text.value = format_seconds(state["remaining_seconds"])
                 phase_label.value = state["phase"]
                 
                 if state["remaining_seconds"] == 0 and state["is_running"] == False:
-                    # Mark complete in DB if it was Work
                     if state["phase"] == "Work":
                         duration = int(self.timer_service._parse_time(config["work_time"]) / 60)
                         self.timer_service.mark_complete(duration)
                     
-                    # Alert and switch phase
                     def on_ok(e):
                         self.timer_service.change_phase()
                         self.page.pop_dialog()
@@ -191,7 +189,6 @@ class PomodoroDashboard:
                 stop_btn.visible = True
 
         return ft.Column([
-            ft.Container(height=40),
             info_box,
             ft.Container(height=40),
             phase_label,
@@ -201,80 +198,17 @@ class PomodoroDashboard:
             ft.Container(height=40),
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
 
-    def _format_seconds(self, seconds):
-        mins, secs = divmod(seconds, 60)
-        return f"{int(mins):02d}:{int(secs):02d}"
-
     def _overview_tab(self):
         """
-        Builds the Overview tab UI.
+        Builds the Overview tab UI, displaying productivity metrics and statistical charts.
 
-        Takes: None
-        Gives: ft.Column
+        Takes:
+          None.
+
+        Gives:
+          ft.Column: A scrollable column containing standardized metric and chart cards.
         """
-        data = self.stats_service.give_overview()
-
-        metrics_row = ft.Row(
-            [
-                ft.Column([ft.Icon(ft.Icons.SPA, color=ft.Colors.BLUE_400), ft.Text(f"Zen Time: {data['total_zen_time']}", weight=ft.FontWeight.BOLD)], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                ft.Column([ft.Icon(ft.Icons.TRACK_CHANGES, color=ft.Colors.AMBER_400), ft.Text(f"Avg Daily: {data['avg_daily_focus']}m", weight=ft.FontWeight.BOLD)], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER, spacing=60
-        )
-
-        bg_color = "#111418"
-        plt.rcParams.update({
-            "text.color": "white",
-            "axes.labelcolor": "white",
-            "xtick.color": "white",
-            "ytick.color": "white",
-            "axes.edgecolor": "white"
-        })
-
-        def fig_to_base64(fig):
-            buf = io.BytesIO()
-            fig.tight_layout(pad=1.5)
-            fig.savefig(buf, format="png", bbox_inches="tight", facecolor=bg_color, dpi=100)
-            plt.close(fig)
-            return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-        # 1. Day of Week (Bar Chart)
-        fig1, ax1 = plt.subplots(figsize=(7, 4))
-        ax1.set_facecolor(bg_color)
-        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        ax1.bar(days, data['dow_data'], color="#42A5F5")
-        chart1_base64 = fig_to_base64(fig1)
-
-        # 2. Session Distribution (Pie Chart)
-        fig2, ax2 = plt.subplots(figsize=(7, 4))
-        ax2.set_facecolor(bg_color)
-        raw_labels = list(data['session_dist'].keys())
-        raw_values = list(data['session_dist'].values())
-        labels = [l for l, v in zip(raw_labels, raw_values) if v > 0]
-        values = [v for v in raw_values if v > 0]
-        if sum(values) > 0:
-            # 3. Zip colors dynamically to match only the active categories
-            all_colors = ["#66BB6A", "#FFA726", "#EF5350"]
-            colors = [c for c, v in zip(all_colors, raw_values) if v > 0]
-            
-            ax2.pie(values, labels=labels, autopct='%1.1f%%', colors=colors, textprops={'color':"w"})
-        else:
-            ax2.text(0.5, 0.5, "No Data", ha='center', va='center')
-
-        chart2_base64 = fig_to_base64(fig2)
-
-        # 3. Trend Analysis (Line Chart)
-        fig3, ax3 = plt.subplots(figsize=(7, 4))
-        ax3.set_facecolor(bg_color)
-        if data['trend_data']:
-            dates, mins = zip(*data['trend_data'])
-            short_dates = [d[-5:] for d in dates]
-            ax3.plot(short_dates, mins, color="#FFCA28", marker="o", linewidth=2)
-            for i, t in enumerate(ax3.get_xticklabels()):
-                if i % 5 != 0: t.set_visible(False)
-        else:
-            ax3.text(0.5, 0.5, "No Data", ha='center', va='center')
-        chart3_base64 = fig_to_base64(fig3)
+        overview_data = self.stats_service.give_overview()
 
         def row_builder(title, visual_content, explanation, insight):
             return ft.Row([
@@ -296,57 +230,45 @@ class PomodoroDashboard:
                 )
             ], vertical_alignment=ft.CrossAxisAlignment.START, spacing=20)
 
-        # 24h Heatmap (Simple visual using ft.Row of colored boxes)
-        heatmap_24h = ft.Row([
-            ft.Container(width=20, height=20, bgcolor=self._get_heat_color(val), tooltip=f"Hour {i}: {val}m") 
-            for i, val in enumerate(data['heatmap_24h'])
-        ], spacing=2, alignment=ft.MainAxisAlignment.CENTER)
-
-        return ft.Column([
-            ft.Container(content=metrics_row, padding=20),
-            ft.Divider(height=1, color=ft.Colors.GREY_800),
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("24-Hour Focus Distribution", size=16, weight=ft.FontWeight.BOLD),
-                    heatmap_24h,
-                    ft.Text("Shows which hours of the day you log the most focus time.", size=12, color=ft.Colors.GREY_400)
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                padding=20
-            ),
-            row_builder(
-                "Day-of-Week Comparison",
-                ft.Image(src=chart1_base64, height=300, fit=ft.BoxFit.CONTAIN),
-                "Compares your total focus time across different days of the week. Helps identify your most and least productive days.",
-                "Identify your 'Warrior' days and try to replicate that focus on 'Slacker' days."
-            ),
-            row_builder(
-                "Session Distribution",
-                ft.Image(src=chart2_base64, height=300, fit=ft.BoxFit.CONTAIN),
-                "Categorizes your sessions by length: Deep Focus (>50m), Standard (~25m), and Short Bursts. More Deep Focus indicates better flow state.",
-                "Aim for a higher percentage of 'Deep Focus' sessions for complex tasks."
-            ),
-            row_builder(
-                "Focus Trend (Last 30 Days)",
-                ft.Image(src=chart3_base64, height=300, fit=ft.BoxFit.CONTAIN),
-                "Tracks your daily focus volume over time. Useful for spotting burnout or growing productivity habits.",
-                "Watch for downward trends which might signal a need for more rest."
+        rows = []
+        for item in overview_data:
+            if item["type"] == "text":
+                visual = ft.Container(
+                    content=ft.Text(item["value"], size=50, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_ACCENT), 
+                    height=300, 
+                    alignment=ft.Alignment.CENTER
+                )
+            else:
+                visual = ft.Image(src=item["image_base64"], height=300, fit=ft.BoxFit.CONTAIN)
+            
+            rows.append(
+                row_builder(
+                    item["title"],
+                    visual,
+                    item["explanation"],
+                    item["insight"]
+                )
             )
-        ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=40)
 
-    def _get_heat_color(self, val):
-        if val == 0: return ft.Colors.GREY_900
-        if val < 30: return ft.Colors.BLUE_200
-        if val < 60: return ft.Colors.BLUE_400
-        return ft.Colors.BLUE_700
+        if not rows:
+            return ft.Column([
+                ft.Container(height=100),
+                ft.Text("No data available yet. Start some Pomodoro sessions to see statistics!", size=20, italic=True, color=ft.Colors.GREY_400)
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
+
+        return ft.Column(rows, expand=True, scroll=ft.ScrollMode.AUTO, spacing=40)
 
     def _settings_tab(self):
         """
-        Builds the Settings tab UI.
+        Builds the Settings tab UI for configuring Pomodoro durations and intervals.
 
-        Takes: None
-        Gives: ft.Container
+        Takes:
+          None.
+
+        Gives:
+          ft.Container: A container with the configuration dropdowns and save button.
         """
-        config = self.settings_service.read_config()
+        config = self.settings_service.get_preset()
         
         work_drop = ft.Dropdown(label="Work Time", options=[ft.dropdown.Option(o) for o in ["30m", "60m", "90m", "120m"]], value=config["work_time"], width=200)
         short_drop = ft.Dropdown(label="Short Break", options=[ft.dropdown.Option(o) for o in ["5m", "10m", "15m"]], value=config["short_break_time"], width=200)
@@ -354,12 +276,8 @@ class PomodoroDashboard:
         interval_drop = ft.Dropdown(label="Long Break Interval", options=[ft.dropdown.Option(str(i)) for i in range(1, 11)], value=str(config["long_break_interval"]), width=200)
 
         def save_settings(e):
-            self.settings_service.change_preset("work_time", work_drop.value)
-            self.settings_service.change_preset("short_break_time", short_drop.value)
-            self.settings_service.change_preset("long_break_time", long_drop.value)
-            self.settings_service.change_preset("long_break_interval", interval_drop.value)
+            self.settings_service.change_preset(work_drop.value, short_drop.value, long_drop.value, interval_drop.value)
             
-            # Reset timer state to match new work time
             self.timer_service.state["phase"] = "Work"
             self.timer_service.state["completed_pomodoros"] = 0
             self.timer_service.stop()
