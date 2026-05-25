@@ -4,15 +4,9 @@ Purpose: User interface for the Todos feature with hardcore deadline management.
 """
 
 import datetime
-import io
-import base64
 import flet as ft
-import matplotlib
-import matplotlib.pyplot as plt
 from core.todos.service import TodoTasks, TodoSettings, TodoStatistics
 from core.shared.wallet import WalletManager
-
-matplotlib.use("agg")
 
 
 class TodoDashboard:
@@ -93,7 +87,7 @@ class TodoDashboard:
         Takes: None
         Gives: ft.Column
         """
-        # Task Input
+
         task_name_input = ft.TextField(hint_text="e.g., Complete Project Documentation", expand=True)
         deadline_date = datetime.datetime.now()
 
@@ -106,7 +100,7 @@ class TodoDashboard:
 
         date_picker = ft.DatePicker(
             on_change=on_date_change,
-            first_date=datetime.datetime.now() - datetime.timedelta(days=2),
+            first_date=datetime.datetime.now(),
             last_date=datetime.datetime.now() + datetime.timedelta(days=365)
         )
         
@@ -131,7 +125,6 @@ class TodoDashboard:
 
         add_btn = ft.IconButton(icon=ft.Icons.ADD_CIRCLE, on_click=add_task, icon_color=ft.Colors.GREEN_ACCENT, icon_size=35)
 
-        # Running Tasks List
         running_tasks = self.tasks_service.list_running_tasks()
         tasks_list = ft.ListView(expand=True, spacing=10)
         
@@ -150,7 +143,6 @@ class TodoDashboard:
                 )
             )
 
-        # Heatmap
         heatmap_container = ft.Column(expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
         
         month_dropdown = ft.Dropdown(
@@ -164,11 +156,16 @@ class TodoDashboard:
             value=self.current_year, width=125
         )
 
+        def get_heatmap_color(count):
+            if count == 0: return ft.Colors.GREY_900
+            if count < 2: return ft.Colors.BLUE_200
+            if count < 4: return ft.Colors.BLUE_400
+            return ft.Colors.BLUE_700
+
         def update_heatmap(e=None):
             heatmap_container.controls.clear()
             data = self.tasks_service.list_finalized_tasks(month_dropdown.value, year_dropdown.value)
             
-            # Map completion_time to day
             day_map = {}
             for t in data:
                 try:
@@ -182,7 +179,7 @@ class TodoDashboard:
             for day in range(1, 32):
                 tasks_today = day_map.get(day, [])
                 count = len(tasks_today)
-                color = self._get_heatmap_color(count)
+                color = get_heatmap_color(count)
 
                 def on_day_click(e, ts=tasks_today, d=day):
                     content = ft.ListView(expand=True, spacing=10, height=300)
@@ -252,20 +249,18 @@ class TodoDashboard:
             ], expand=True)
         ], expand=True, spacing=10)
 
-    def _get_heatmap_color(self, count):
-        if count == 0: return ft.Colors.GREY_900
-        if count < 2: return ft.Colors.BLUE_200
-        if count < 4: return ft.Colors.BLUE_400
-        return ft.Colors.BLUE_700
-
     def _overview_tab(self):
         """
-        Builds the Overview tab UI.
+        Builds the Overview tab UI with pre-rendered analytics.
 
-        Takes: None
-        Gives: ft.Column
+        Takes:
+          None.
+
+        Gives:
+          ft.Column: A scrollable column containing metrics and charts.
         """
         data = self.stats_service.give_overview()
+        overview_data = data["overview_data"]
 
         metrics_row = ft.Row(
             [
@@ -275,44 +270,19 @@ class TodoDashboard:
             alignment=ft.MainAxisAlignment.CENTER, spacing=40
         )
 
-        bg_color = "#111418"
-        plt.rcParams.update({
-            "text.color": "white",
-            "axes.labelcolor": "white",
-            "xtick.color": "white",
-            "ytick.color": "white",
-            "axes.edgecolor": "white"
-        })
-
-        def fig_to_base64(fig):
-            buf = io.BytesIO()
-            fig.tight_layout(pad=1.5)
-            fig.savefig(buf, format="png", bbox_inches="tight", facecolor=bg_color, dpi=100)
-            plt.close(fig)
-            return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-        # 1. Consistency Trend (Line Chart)
-        fig1, ax1 = plt.subplots(figsize=(7, 4))
-        ax1.set_facecolor(bg_color)
-        ax1.plot(data['consistency_trend'], color="#42A5F5", marker="o", linewidth=2)
-        ax1.set_title("Consistency Trend (Last 30 Days)", color="white")
-        chart1_base64 = fig_to_base64(fig1)
-
-        # 2. Lead Time vs Urgency (Scatter Plot)
-        fig2, ax2 = plt.subplots(figsize=(7, 4))
-        ax2.set_facecolor(bg_color)
-        if data['scatter_points']:
-            x, y = zip(*data['scatter_points'])
-            ax2.scatter(x, y, color="#FFCA28", alpha=0.6)
-            max_val = max(max(x), max(y))
-            ax2.plot([0, max_val], [0, max_val], color="red", linestyle="--", alpha=0.5)
-        else:
-            ax2.text(0.5, 0.5, "No Data", ha='center', va='center')
-        ax2.set_xlabel("Vastness (Hours)")
-        ax2.set_ylabel("Speed to Finish (Hours)")
-        chart2_base64 = fig_to_base64(fig2)
-
         def row_builder(title, visual_content, explanation, insight):
+            """
+            Helper to build a standardized layout for metrics.
+
+            Takes:
+              title (str): Metric title.
+              visual_content (ft.Control): The chart or visual representation.
+              explanation (str): Technical explanation of the metric.
+              insight (str): Personalized insight derived from the data.
+
+            Gives:
+              ft.Row: A formatted row containing visual and text components.
+            """
             return ft.Row([
                 ft.Container(
                     content=ft.Column([
@@ -332,21 +302,30 @@ class TodoDashboard:
                 )
             ], vertical_alignment=ft.CrossAxisAlignment.START, spacing=20)
 
+        rows = []
+        for item in overview_data:
+            if item["type"] == "text":
+                visual = ft.Container(
+                    content=ft.Text(item["value"], size=50, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_ACCENT), 
+                    height=300, 
+                    alignment=ft.Alignment.CENTER
+                )
+            else:
+                visual = ft.Image(src=item["image_base64"], height=300, fit=ft.BoxFit.CONTAIN)
+            
+            rows.append(
+                row_builder(
+                    item["title"],
+                    visual,
+                    item["explanation"],
+                    item["insight"]
+                )
+            )
+
         return ft.Column([
             ft.Container(content=metrics_row, padding=20),
             ft.Divider(height=1, color=ft.Colors.GREY_800),
-            row_builder(
-                "Consistency Trend", 
-                ft.Image(src=chart1_base64, height=300, fit=ft.BoxFit.CONTAIN), 
-                "This chart shows your task completion volume over the last 30 days. It helps identify if you're a steady worker or a rollercoaster performer.", 
-                f"Your completion stability (Standard Deviation) is {data['consistency_std']}."
-            ),
-            row_builder(
-                "Lead Time vs Urgency", 
-                ft.Image(src=chart2_base64, height=300, fit=ft.BoxFit.CONTAIN), 
-                "X-axis represents 'Broadness' (deadline window), Y-axis is 'Speed to Finish'. Dots near the red line are last-minute completions. Proactive finishes stay far below the line.", 
-                "Try to keep your data points in the 'Proactive Zone' far below the diagonal line."
-            )
+            ft.Column(controls=rows, spacing=40)
         ], expand=True, scroll=ft.ScrollMode.AUTO, spacing=40)
 
     def _settings_tab(self):
