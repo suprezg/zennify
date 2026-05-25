@@ -6,31 +6,31 @@ Purpose: Interactive popup for logging activity entries with streak and multipli
 import datetime
 import asyncio
 import flet as ft
-from core.activity.service import ActivitySettings, ActivityStorage
-from core.shared.configurator import ConfigManager
+from core.activity.service import ActivitySettings, ActivityOverlay
 from core.shared.wallet import WalletManager
 
 
 class ActivityPopup:
     """
-    Main popup class for the Activity logger.
+    Main popup class for the Activity logger feature.
+    Handles the user interface for capturing activity descriptions, tags, and productivity status.
     """
 
     def __init__(self, page):
         """
-        Initializes the popup with Flet page and services.
+        Initializes the activity popup with the necessary services and UI components.
 
-        Takes: page (ft.Page)
-        Gives: None
+        Takes:
+            page (ft.Page): The root page object for rendering the popup.
+
+        Gives:
+            None: Initializes instance attributes and configures initial UI state.
         """
         self.page = page
         self.settings_service = ActivitySettings()
-        self.config_manager = ConfigManager()
-        self.storage_service = ActivityStorage()
-        self.wallet_manager = WalletManager()
+        self.popup_service = ActivityOverlay()
         
-        interval_timer = self.config_manager.read_value("activity", "popup_interval_timer") or "30m"
-        visible_timer = self.config_manager.read_value("activity", "popup_visible_timer") or "1m"
+        interval_timer, visible_timer = self.settings_service.get_timer_details()
         self.interval_seconds = self._parse_timer(interval_timer)
         self.visible_seconds = self._parse_timer(visible_timer)
         
@@ -40,7 +40,7 @@ class ActivityPopup:
         self.timer_text = ft.Text(size=14, weight=ft.FontWeight.W_500, color=ft.Colors.AMBER)
         self.description_input = ft.TextField(label="What were you doing?", expand=True)
         
-        recent_tags = self.storage_service.get_recent_tags()
+        recent_tags = self.popup_service.get_recent_tags()
         self.tag_dropdown = ft.Dropdown(
             label="Select Tag",
             options=[ft.dropdown.Option(tag) for tag in recent_tags],
@@ -62,10 +62,13 @@ class ActivityPopup:
 
     def view(self):
         """
-        Configures and displays the popup window.
+        Configures the window properties and displays the activity logging interface.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Operates on the internal 'page' attribute.
+
+        Gives:
+            None: Cleans the page, adds UI controls, and starts the countdown task.
         """
         self.page.title = "Zennify - Log Activity"
         self.page.theme_mode = ft.ThemeMode.DARK
@@ -112,10 +115,13 @@ class ActivityPopup:
 
     async def _countdown_timer(self):
         """
-        Async task to handle the countdown and auto-submission.
+        Handles the visual countdown and triggers automatic submission upon timeout.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Uses the 'visible_seconds' attribute.
+
+        Gives:
+            None: Updates the UI timer text and eventually calls _submit().
         """
         remaining = self.visible_seconds
         while remaining > 0:
@@ -129,10 +135,13 @@ class ActivityPopup:
 
     def _submit(self, auto=False):
         """
-        Calculates rewards and logs the entry to the database.
+        Processes the activity data, calculates rewards, and persists the entry.
 
-        Takes: auto (bool)
-        Gives: None
+        Takes:
+            auto (bool): If True, indicates a timeout submission with default 'Inactive' values.
+
+        Gives:
+            None: Writes to the database, updates wallet/streak, and closes the window.
         """
         if auto:
             description = "Inactive"
@@ -143,11 +152,10 @@ class ActivityPopup:
             tag = self.new_tag_input.value or self.tag_dropdown.value or "None"
             is_productive = self.productivity_radio.value == "productive"
 
-        streak = self.config_manager.read_value("activity", "streak") or 0
-        multiplier = self.config_manager.read_value("activity", "multiplier") or 1.0
+        streak, multiplier = self.settings_service.get_streak_data()
         
         if is_productive:
-            last_entry = self.storage_service.get_last_entry()
+            last_entry = self.popup_service.get_last_entry()
             if last_entry and last_entry[6]:
                 multiplier = min(2.0, multiplier + 0.1)
                 streak += 1
@@ -161,7 +169,7 @@ class ActivityPopup:
             multiplier = 1.0
             retribution = -2
         
-        self.storage_service.write_entry(
+        self.popup_service.write_entry(
             self.current_time.strftime("%Y-%m-%d"),
             self.start_time.strftime("%H:%M"),
             self.current_time.strftime("%H:%M"),
@@ -171,17 +179,20 @@ class ActivityPopup:
             retribution
         )
         
-        self.wallet_manager.earn_coins(retribution)
+        WalletManager().earn_coins(retribution)
         self.settings_service.update_streak_data(streak, round(multiplier, 1))
         
         self.page.run_task(self.page.window.destroy)
 
     def _parse_timer(self, timer_str):
         """
-        Parses timer strings like '30m' or '1h' into seconds.
+        Converts human-readable timer strings into an integer representing seconds.
 
-        Takes: timer_str (str)
-        Gives: int
+        Takes:
+            timer_str (str): A string representing time duration (e.g., '30m', '1h').
+
+        Gives:
+            int: The equivalent duration in seconds.
         """
         try:
             val = int(timer_str[:-1])

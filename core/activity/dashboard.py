@@ -4,37 +4,31 @@ Purpose: User interface for the Activity Tracker feature.
 """
 
 import datetime
-import io
-import base64
-import math
 import flet as ft
-import matplotlib
-import matplotlib.pyplot as plt
 from core.activity.service import ActivitySettings, ActivityStatistics, ActivityReview
-from core.shared.configurator import ConfigManager
 from core.shared.wallet import WalletManager
-
-matplotlib.use("agg")
 
 
 class ActivityDashboard:
     """
     Main dashboard class for the Activity feature.
+    Handles UI rendering and interaction for activity tracking, overview, and settings.
     """
 
     def __init__(self, page):
         """
-        Initializes the dashboard with the Flet page.
+        Initializes the dashboard with the Flet page and necessary services.
 
-        Takes: page (ft.Page)
-        Gives: None
+        Takes:
+            page (ft.Page): The root page object for rendering the dashboard.
+
+        Gives:
+            None: Initializes service instances and current date attributes.
         """
         self.page = page
         self.settings_service = ActivitySettings()
-        self.config_manager = ConfigManager()
         self.stats_service = ActivityStatistics()
         self.review_service = ActivityReview()
-        self.wallet_manager = WalletManager()
 
         self.current_month = datetime.datetime.now().strftime("%m")
         self.current_year = datetime.datetime.now().strftime("%Y")
@@ -43,8 +37,11 @@ class ActivityDashboard:
         """
         Builds and displays the main view for the activity dashboard.
 
-        Takes: None
-        Gives: None
+        Takes:
+            None: Operates on the internal 'page' attribute.
+
+        Gives:
+            None: Cleans the page and adds the tabs container.
         """
         self.page.title = "Zennify - Activity Tracker"
         self.page.theme_mode = ft.ThemeMode.DARK
@@ -81,7 +78,7 @@ class ActivityDashboard:
 
         self.page.add(tabs)
 
-        if self.wallet_manager.is_bankrupt() == -1:
+        if WalletManager().is_bankrupt() == -1:
             dialog = ft.AlertDialog(
                 title=ft.Text("Wallet Warning"),
                 content=ft.Text("Your wallet balance is currently negative. You can try to recover by being more productive or declare bankruptcy by running 'zennify.sh --bankrupt' in your terminal."),
@@ -91,34 +88,104 @@ class ActivityDashboard:
 
     def _review_tab(self):
         """
-        Builds the Review tab UI.
+        Builds the Review tab UI, including the activity heatmap.
 
-        Takes: None
-        Gives: ft.Column
+        Takes:
+            None: Uses internal services and attributes.
+
+        Gives:
+            ft.Column: A scrollable column containing the period selector and heatmap.
         """
-        month_dropdown = ft.Dropdown(
-            label="Month",
-            options=[ft.dropdown.Option(f"{i:02d}") for i in range(1, 13)],
-            value=self.current_month,
-            width=120
-        )
-        year_dropdown = ft.Dropdown(
-            label="Year",
-            options=[ft.dropdown.Option(str(y)) for y in range(2024, 2031)],
-            value=self.current_year,
-            width=120
+        period_input = ft.TextField(
+            label="Period (mm/yyyy)",
+            value=f"{self.current_month}/{self.current_year}",
+            hint_text="05/2026",
+            width=180,
+            text_align=ft.TextAlign.CENTER
         )
 
         heatmap_container = ft.Column(visible=False, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
         spacer_top = ft.Container(expand=True)
         spacer_bottom = ft.Container(expand=True)
 
+        def get_heatmap_color(frequency):
+            """
+            Returns a blue shade based on activity frequency.
+
+            Takes:
+                frequency (int): The number of activities logged for a day.
+
+            Gives:
+                str: A Flet color constant or None if frequency is 0.
+            """
+            if frequency == 0: return None
+            if frequency < 3: return ft.Colors.BLUE_200
+            if frequency < 5: return ft.Colors.BLUE_400
+            if frequency < 7: return ft.Colors.BLUE_600
+            return ft.Colors.BLUE_900
+
+        def show_day_details(date_str):
+            """
+            Opens a dialog showing activity details for a specific day.
+
+            Takes:
+                date_str (str): The date in 'yyyy-mm-dd' format.
+
+            Gives:
+                None: Displays an AlertDialog on the page.
+            """
+            entries = self.review_service.get_activity(date_str)
+            content_list = ft.ListView(expand=True, spacing=10, height=300)
+
+            for entry in entries:
+                status = "Productive" if entry[6] else "Unproductive"
+                status_color = ft.Colors.GREEN_ACCENT if entry[6] else ft.Colors.RED_ACCENT
+                content_list.controls.append(
+                    ft.ListTile(
+                        title=ft.Text(f"#{entry[5]} ({status})", color=status_color, weight=ft.FontWeight.BOLD),
+                        subtitle=ft.Text(f"{entry[2]} - {entry[3]} | Earned: {entry[7]} coins"),
+                        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400)
+                    )
+                )
+
+            if not entries:
+                content_list.controls.append(ft.Text("No activities logged for this day.", italic=True))
+
+            dialog = ft.AlertDialog(
+                title=ft.Text(f"Review: {date_str}"),
+                content=ft.Container(content=content_list, width=400),
+                actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
+            )
+            self.page.show_dialog(dialog)
+
         def show_heatmap(e):
+            """
+            Parses the period input and renders the activity heatmap.
+
+            Takes:
+                e (ft.ControlEvent): The event object from the 'Show' button click.
+
+            Gives:
+                None: Updates the heatmap container and refreshes the page.
+            """
             spacer_top.visible = False
             spacer_bottom.visible = False
 
+            try:
+                period = period_input.value.strip()
+                if "/" not in period:
+                    raise ValueError
+                month, year = period.split("/")
+                if not (month.isdigit() and 1 <= int(month) <= 12 and year.isdigit() and len(year) == 4):
+                    raise ValueError
+            except ValueError:
+                self.page.snack_bar = ft.SnackBar(ft.Text("Please enter period as mm/yyyy (e.g., 05/2026)"))
+                self.page.snack_bar.open = True
+                self.page.update()
+                return
+
             heatmap_container.controls.clear()
-            data = self.review_service.get_heatmap(month_dropdown.value, year_dropdown.value)
+            data = self.review_service.get_heatmap(month, year)
 
             grid = ft.GridView(
                 expand=True,
@@ -131,10 +198,10 @@ class ActivityDashboard:
 
             for day in range(1, 32):
                 freq = data.get(day, 0)
-                color = self._get_heatmap_color(freq)
+                color = get_heatmap_color(freq)
 
-                def on_day_click(e, d=day):
-                    self._show_day_details(f"{year_dropdown.value}-{month_dropdown.value}-{d:02d}")
+                def on_day_click(e, d=day, m=month, y=year):
+                    show_day_details(f"{y}-{m}-{d:02d}")
 
                 grid.controls.append(
                     ft.Container(
@@ -156,7 +223,7 @@ class ActivityDashboard:
         show_button = ft.Button("Show", on_click=show_heatmap, height=50)
 
         controls_row = ft.Row(
-            [ft.Text("Select Period:", size=16), month_dropdown, year_dropdown, show_button],
+            [ft.Text("Select Period:", size=16), period_input, show_button],
             alignment=ft.MainAxisAlignment.CENTER,
             spacing=20
         )
@@ -172,59 +239,17 @@ class ActivityDashboard:
             expand=True
         )
 
-    def _get_heatmap_color(self, frequency):
-        """
-        Returns a blue shade based on activity frequency.
-
-        Takes: frequency (int)
-        Gives: str (color) or None
-        """
-        if frequency == 0: return None
-        if frequency < 3: return ft.Colors.BLUE_200
-        if frequency < 5: return ft.Colors.BLUE_400
-        if frequency < 7: return ft.Colors.BLUE_600
-        return ft.Colors.BLUE_900
-
-    def _show_day_details(self, date_str):
-        """
-        Opens a dialog showing activity details for a specific day.
-
-        Takes: date_str (str)
-        Gives: None
-        """
-        entries = self.review_service.get_activity(date_str)
-        content_list = ft.ListView(expand=True, spacing=10, height=300)
-
-        for entry in entries:
-            status = "Productive" if entry[6] else "Unproductive"
-            status_color = ft.Colors.GREEN_ACCENT if entry[6] else ft.Colors.RED_ACCENT
-            content_list.controls.append(
-                ft.ListTile(
-                    title=ft.Text(f"{entry[2]} - {entry[3]} | #{entry[5]} ({status})", color=status_color, weight=ft.FontWeight.BOLD),
-                    subtitle=ft.Text(f"{entry[4]} | Earned: {entry[7]} coins"),
-                    bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.BLUE_400)
-                )
-            )
-
-        if not entries:
-            content_list.controls.append(ft.Text("No activities logged for this day.", italic=True))
-
-        dialog = ft.AlertDialog(
-            title=ft.Text(f"Review: {date_str}"),
-            content=ft.Container(content=content_list, width=400),
-            actions=[ft.TextButton("Close", on_click=lambda e: self.page.pop_dialog())]
-        )
-        self.page.show_dialog(dialog)
-
     def _overview_tab(self):
         """
-        Builds the Overview tab UI.
+        Builds the Overview tab UI with metrics and charts.
 
-        Takes: None
-        Gives: ft.Column
+        Takes:
+            None: Uses internal stats service and config manager.
+
+        Gives:
+            ft.Column: A scrollable column containing stats and charts.
         """
-        streak = self.config_manager.read_value("activity", "streak") or 0
-        multiplier = self.config_manager.read_value("activity", "multiplier") or 1.0
+        streak, multiplier = self.settings_service.get_streak_data()
 
         metrics_row = ft.Row(
             [
@@ -235,40 +260,31 @@ class ActivityDashboard:
             spacing=50
         )
 
-        month_dropdown = ft.Dropdown(
-            label="Month",
-            options=[ft.dropdown.Option(f"{i:02d}") for i in range(1, 13)],
-            value=self.current_month,
-            width=120
-        )
-        year_dropdown = ft.Dropdown(
-            label="Year",
-            options=[ft.dropdown.Option(str(y)) for y in range(2024, 2031)],
-            value=self.current_year,
-            width=120
+        period_input = ft.TextField(
+            label="Filter (mm/yyyy)",
+            value=f"{self.current_month}/{self.current_year}",
+            hint_text="05/2026",
+            width=180,
+            text_align=ft.TextAlign.CENTER
         )
 
         charts_container = ft.Column(visible=False, expand=True, spacing=40)
         spacer_mid = ft.Container(expand=True)
         spacer_bottom = ft.Container(expand=True)
 
-        bg_color = "#111418"
-        plt.rcParams.update({
-            "text.color": "white",
-            "axes.labelcolor": "white",
-            "xtick.color": "white",
-            "ytick.color": "white",
-            "axes.edgecolor": "white",
-        })
-
-        def fig_to_base64(fig):
-            buf = io.BytesIO()
-            fig.tight_layout(pad=1.5)
-            fig.savefig(buf, format="png", bbox_inches="tight", facecolor=bg_color, dpi=100)
-            plt.close(fig)
-            return base64.b64encode(buf.getvalue()).decode("utf-8")
-
         def row_builder(title, visual_content, explanation, insight):
+            """
+            Helper to build a standardized layout for metrics.
+
+            Takes:
+                title (str): Metric title.
+                visual_content (ft.Control): The chart or visual representation.
+                explanation (str): Technical explanation of the metric.
+                insight (str): Personalized insight derived from the data.
+
+            Gives:
+                ft.Row: A formatted row containing visual and text components.
+            """
             return ft.Row([
                 ft.Container(
                     content=ft.Column([
@@ -289,96 +305,54 @@ class ActivityDashboard:
             ], vertical_alignment=ft.CrossAxisAlignment.START, spacing=20)
 
         def show_overview(e):
+            """
+            Generates and displays overview charts for the selected period.
+
+            Takes:
+                e (ft.ControlEvent): The event object from the 'Show' button click.
+
+            Gives:
+                None: Updates charts_container and refreshes the page.
+            """
             spacer_mid.visible = False
             spacer_bottom.visible = False
+
+            try:
+                period = period_input.value.strip()
+                if "/" not in period:
+                    raise ValueError
+                month, year = period.split("/")
+                if not (month.isdigit() and 1 <= int(month) <= 12 and year.isdigit() and len(year) == 4):
+                    raise ValueError
+            except ValueError:
+                self.page.snack_bar = ft.SnackBar(ft.Text("Please enter period as mm/yyyy (e.g., 05/2026)"))
+                self.page.snack_bar.open = True
+                self.page.update()
+                return
+
             charts_container.controls.clear()
+            overview_data = self.stats_service.give_overview(month, year)
 
-            data = self.stats_service.give_overview(month_dropdown.value, year_dropdown.value)
-
-            # 1. Productivity Ratio (Pie Chart)
-            fig1, ax1 = plt.subplots(figsize=(7, 4))
-            ax1.set_facecolor(bg_color)
-            pie_data = data.get("pie_data", {})
-            prod = pie_data.get("productive", 0)
-            unprod = pie_data.get("unproductive", 0)
-            total = prod + unprod
-            if total > 0:
-                ax1.pie([prod, unprod], labels=["Productive", "Unproductive"], autopct='%1.1f%%', colors=["#66BB6A", "#EF5350"], textprops={'color':"w"})
-                prod_pc = round((prod / total * 100), 1)
-            else:
-                ax1.text(0.5, 0.5, "No Data", ha='center', va='center', color="white")
-                prod_pc = 0
-            chart1_base64 = fig_to_base64(fig1)
-
-            # 2. Activity Mix (Top 5) (Radar Chart)
-            radar_data = data.get("radar_data", [])
-            fig2 = plt.figure(figsize=(7, 4))
-            fig2.patch.set_facecolor(bg_color)
-            if len(radar_data) >= 3:
-                ax2 = fig2.add_subplot(111, polar=True)
-                ax2.set_facecolor(bg_color)
-                labels = [item[0] for item in radar_data]
-                values = [item[1] for item in radar_data]
-                num_vars = len(labels)
-                angles = [n / float(num_vars) * 2 * math.pi for n in range(num_vars)]
-                angles += angles[:1]
-                values += values[:1]
-                ax2.plot(angles, values, linewidth=1, linestyle='solid', color="#42A5F5")
-                ax2.fill(angles, values, "#42A5F5", alpha=0.3)
-                ax2.set_xticks(angles[:-1])
-                ax2.set_xticklabels(labels, color="white", size=10)
-                ax2.tick_params(axis='y', colors='white')
-                top_activity = labels[0] if labels else "None"
-            else:
-                ax2 = fig2.add_subplot(111)
-                ax2.set_facecolor(bg_color)
-                ax2.text(0.5, 0.5, "Not enough data (needs 3+)", ha='center', va='center', color="white")
-                ax2.axis('off')
-                top_activity = "None"
-            chart2_base64 = fig_to_base64(fig2)
-
-            # 3. Detailed Tag Frequency (Bar Chart)
-            fig3, ax3 = plt.subplots(figsize=(7, 4))
-            ax3.set_facecolor(bg_color)
-            bar_data = data.get("bar_data", [])
-            if bar_data:
-                labels = [item[0] for item in bar_data]
-                counts = [item[1] for item in bar_data]
-                ax3.bar(labels, counts, color="#26C6DA")
-                ax3.tick_params(axis='x', rotation=45)
-            else:
-                ax3.text(0.5, 0.5, "No Data", ha='center', va='center', color="white")
-            chart3_base64 = fig_to_base64(fig3)
-
-            rows = [
-                row_builder(
-                    "Productivity Ratio",
-                    ft.Image(src=chart1_base64, height=300, fit=ft.BoxFit.CONTAIN),
-                    "This chart shows the balance between your productive and unproductive sessions. It gives a quick glance at how effectively you're spending your logged time.",
-                    f"Your productivity ratio for this month is {prod_pc}%."
-                ),
-                row_builder(
-                    "Activity Mix (Top 5)",
-                    ft.Image(src=chart2_base64, height=300, fit=ft.BoxFit.CONTAIN),
-                    "The radar chart displays your top 5 activities, forming a 'shape' of your habits. A well-rounded shape indicates varied activities, while spikes show intense focus on specific areas.",
-                    f"Your dominant activity is '{top_activity}'."
-                ),
-                row_builder(
-                    "Detailed Tag Frequency",
-                    ft.Image(src=chart3_base64, height=300, fit=ft.BoxFit.CONTAIN),
-                    "This bar chart provides a detailed breakdown of all your activity tags by their frequency of use, highlighting where your time is being invested the most.",
-                    f"You have tracked {len(bar_data)} different activities this month."
+            rows = []
+            for item in overview_data:
+                rows.append(
+                    row_builder(
+                        item["title"],
+                        ft.Image(src=item["image_base64"], height=300, fit=ft.BoxFit.CONTAIN),
+                        item["explanation"],
+                        item["insight"]
+                    )
                 )
-            ]
 
             charts_container.controls.extend(rows)
             charts_container.visible = True
             self.page.update()
+            return
 
         show_button = ft.Button("Show", on_click=show_overview, height=50)
 
         picker_row = ft.Row(
-            [ft.Text("Filter:", size=16), month_dropdown, year_dropdown, show_button],
+            [ft.Text("Filter:", size=16), period_input, show_button],
             alignment=ft.MainAxisAlignment.CENTER,
             spacing=20
         )
@@ -389,7 +363,7 @@ class ActivityDashboard:
                 ft.Divider(height=1, color=ft.Colors.GREY_800),
                 spacer_mid,
                 ft.Container(content=picker_row, padding=20),
-                ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                ft.Divider(height=1, color=ft.Colors.TRANSPARENT),
                 charts_container,
                 spacer_bottom
             ],
@@ -401,23 +375,16 @@ class ActivityDashboard:
 
     def _settings_tab(self):
         """
-        Builds the Settings tab UI.
+        Builds the Settings tab UI for activity configuration.
 
-        Takes: None
-        Gives: ft.Container
+        Takes:
+            None: Uses internal config manager and settings service.
+
+        Gives:
+            ft.Container: A centered container with activity settings.
         """
-        service_status = self.config_manager.read_value("activity", "service_status") or False
-        popup_interval = self.config_manager.read_value("activity", "popup_interval_timer") or "30m"
-        popup_visible = self.config_manager.read_value("activity", "popup_visible_timer") or "2m"
-
-        def update_service(e):
-            self.settings_service.toggle_service(e.control.value)
-
-        def update_interval(e):
-            self.settings_service.change_popup_interval_timer(e.control.value)
-
-        def update_visible(e):
-            self.settings_service.change_popup_visible_timer(e.control.value)
+        service_status = self.settings_service.get_service_details()[-1]
+        popup_interval, popup_visible= self.settings_service.get_timer_details()
 
         return ft.Container(
             content=ft.Column(
@@ -426,7 +393,7 @@ class ActivityDashboard:
                         content=ft.Row(
                             [
                                 ft.Text("Background Service", size=18),
-                                ft.Switch(value=service_status, on_change=update_service)
+                                ft.Switch(value=service_status, on_change=lambda e: self.settings_service.toggle_service(e.control.value))
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                         ),
@@ -440,7 +407,7 @@ class ActivityDashboard:
                                     options=[ft.dropdown.Option(o) for o in ["30m", "1h", "2h", "3h"]],
                                     value=popup_interval,
                                     width=200,
-                                    on_select=update_interval
+                                    on_select=lambda e: self.settings_service.change_popup_interval_timer(e.control.value)
                                 )
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN
@@ -455,7 +422,7 @@ class ActivityDashboard:
                                     options=[ft.dropdown.Option(o) for o in ["2m", "5m", "10m", "15m"]],
                                     value=popup_visible,
                                     width=200,
-                                    on_select=update_visible
+                                    on_select=lambda e: self.settings_service.change_popup_visible_timer(e.control.value)
                                 )
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN
