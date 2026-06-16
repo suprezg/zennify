@@ -44,7 +44,7 @@ schtasks /create /tn "ZennifyActivityTask" /tr "\"%ZENNIFY_BAT%\" --activity-pop
 echo Task Scheduler entry generated
 
 echo Generating Config File in %DATA_ROOT%...
-python -c "import json, os; config = { 'system_config': { 'project_root': r'%PROJECT_ROOT%', 'venv_path': r'%VENV_PATH%', 'database_path': r'%DB_PATH%' }, 'activity_config': { 'service_path': 'ZennifyActivityTask', 'timer_path': 'ZennifyActivityTask', 'service_status': False, 'popup_interval_timer': '30m', 'popup_visible_timer': '2m', 'streak': 0, 'multiplier': 1.0 }, 'flashcard_config': { 'folder_path': r'%PROJECT_ROOT%' }, 'todo_config': { 'max_tasks': 5, 'streak': 0, 'multiplier': 1.0 }, 'pomodoro_config': { 'work_time': '60m', 'short_break_time': '5m', 'long_break_time': '15m', 'long_break_interval': '2' } }; f=open(r'%DATA_ROOT%\config.json', 'w'); json.dump(config, f, indent=4); f.close()"
+python -c "import json, os; config = { 'system_config': { 'project_root': r'%PROJECT_ROOT%', 'venv_path': r'%VENV_PATH%', 'database_path': r'%DB_PATH%' }, 'activity_config': { 'service_path': 'ZennifyActivityTask', 'timer_path': 'ZennifyActivityTask', 'service_status': False, 'popup_interval_timer': '30m', 'popup_visible_timer': '2m', 'streak': 0, 'multiplier': 1.0 }, 'flashcard_config': { 'folder_paths': [r'%PROJECT_ROOT%'] }, 'todo_config': { 'max_tasks': 5, 'streak': 0, 'multiplier': 1.0 }, 'pomodoro_config': { 'work_time': '60m', 'short_break_time': '5m', 'long_break_time': '15m', 'long_break_interval': '2' } }; f=open(r'%DATA_ROOT%\config.json', 'w'); json.dump(config, f, indent=4); f.close()"
 echo Config File Generated
 
 echo Setup complete. Use %ZENNIFY_BAT% to run the application.

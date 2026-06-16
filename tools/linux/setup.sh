@@ -97,7 +97,7 @@ generate_config() {
             \"multiplier\": 1.0
         },
         \"flashcard_config\": {
-            \"folder_path\": \"$PROJECT_ROOT\"
+            \"folder_paths\": [\"$PROJECT_ROOT\"]
         },
         \"todo_config\": {
             \"max_tasks\": 5,

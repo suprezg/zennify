@@ -29,7 +29,7 @@ def test_flashcards_dashboard_view(mock_stats, mock_settings, mock_revision, moc
     """
     mock_revision.return_value.get_deck_stats.return_value = ({"Deck1": 5}, 5)
     mock_stats.return_value.give_overview.return_value = {"overview_data": []}
-    mock_settings.return_value.get_folder_path.return_value = "/tmp/flashcards"
+    mock_settings.return_value.get_folder_paths.return_value = ["/tmp/flashcards"]
     
     dashboard = FlashcardDashboard(mock_page)
     dashboard.view()

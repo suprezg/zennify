@@ -387,55 +387,102 @@ class FlashcardDashboard:
 
     def _settings_tab(self):
         """
-        Builds the Settings tab UI.
+        Builds the Settings tab UI for managing multiple flashcard directories.
 
         Takes:
             None: Uses internal settings service.
 
         Gives:
-            ft.Container: A container with the settings UI.
+            ft.Container: A container with the multi-path settings UI.
         """
-        current_path = self.settings_service.get_folder_path()
+        current_paths = self.settings_service.get_folder_paths()
         
-        path_input = ft.TextField(
-            value=current_path,
-            expand=True,
-            hint_text="e.g., /path/to/your/markdown/notes"
-        )
+        paths_list = ft.Column(spacing=10)
         
-        def update_path(e):
-            """
-            Handles the folder path update action.
-
-            Takes:
-                e (ft.ControlEvent): The event object from the button click.
-
-            Gives:
-                None: Updates the folder path and refreshes the view.
-            """
-            if not os.path.exists(path_input.value):
-                self.settings_service.change_folder(path_input.value)
-                self.view(selected_index=2)
-                snack = ft.SnackBar(ft.Text("Warning: Directory does not exist! Flashcards have been cleared."))
-                self.page.overlay.append(snack)
-                snack.open = True
-                self.page.update()
-                return
-                
-            self.settings_service.change_folder(path_input.value)
+        def delete_path_confirmed(path):
+            new_paths = [p for p in current_paths if p != path]
+            self.settings_service.update_folder_paths(new_paths)
             self.view(selected_index=2)
-            snack = ft.SnackBar(ft.Text("Path updated and folder rescanned!"))
+            snack = ft.SnackBar(ft.Text(f"Path removed: {path}"))
             self.page.overlay.append(snack)
             snack.open = True
             self.page.update()
 
-        update_btn = ft.Button("Update & Rescan", on_click=update_path, height=50)
+        def show_delete_dialog(path):
+            dialog = ft.AlertDialog(
+                title=ft.Text("Confirm Deletion"),
+                content=ft.Text(f"This action will cause to delete any flashcards inside database associated with this path: '{path}'. This cannot be undone. Are you sure?"),
+                actions=[
+                    ft.TextButton("Yes", on_click=lambda _: (self.page.pop_dialog(), delete_path_confirmed(path))),
+                    ft.TextButton("No", on_click=lambda _: self.page.pop_dialog()),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            self.page.show_dialog(dialog)
+
+        for path in current_paths:
+            paths_list.controls.append(
+                ft.Row([
+                    ft.Icon(ft.Icons.FOLDER, color=ft.Colors.AMBER_400),
+                    ft.Text(path, expand=True, size=16),
+                    ft.IconButton(
+                        icon=ft.Icons.DELETE_OUTLINE,
+                        icon_color=ft.Colors.RED_400,
+                        tooltip="Remove Path",
+                        on_click=lambda e, p=path: show_delete_dialog(p)
+                    )
+                ], alignment=ft.MainAxisAlignment.START)
+            )
+
+        new_path_input = ft.TextField(
+            label="New Flashcards Directory",
+            hint_text="e.g., /path/to/your/markdown/notes",
+            expand=True
+        )
+
+        def add_path(e):
+            val = new_path_input.value.strip()
+            if not val:
+                return
+            
+            if len(current_paths) >= 10:
+                snack = ft.SnackBar(ft.Text("Limit reached! You can only have up to 10 paths."))
+                self.page.overlay.append(snack)
+                snack.open = True
+                self.page.update()
+                return
+
+            if val in current_paths:
+                snack = ft.SnackBar(ft.Text("This path is already added!"))
+                self.page.overlay.append(snack)
+                snack.open = True
+                self.page.update()
+                return
+
+            if not os.path.exists(val):
+                snack = ft.SnackBar(ft.Text("Warning: Directory does not exist! It will be added but no cards will be scanned."))
+                self.page.overlay.append(snack)
+                snack.open = True
+            
+            new_paths = current_paths + [val]
+            self.settings_service.update_folder_paths(new_paths)
+            self.view(selected_index=2)
+            if os.path.exists(val):
+                snack = ft.SnackBar(ft.Text("Path added and folder scanned!"))
+                self.page.overlay.append(snack)
+                snack.open = True
+                self.page.update()
+
+        add_btn = ft.Button("Add Path", on_click=add_path, height=50)
 
         return ft.Container(
             content=ft.Column([
-                ft.Text("Flashcards Root Directory", size=18),
-                ft.Text("Specify the root folder where your markdown flashcards are stored.", color=ft.Colors.GREY_400),
-                ft.Row([path_input, update_btn], alignment=ft.MainAxisAlignment.START, spacing=20)
+                ft.Text("Flashcards Root Directories", size=18, weight=ft.FontWeight.BOLD),
+                ft.Text("Specify the root folders where your markdown flashcards are stored. You can add up to 10 paths.", color=ft.Colors.GREY_400),
+                ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                paths_list,
+                ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                ft.Row([new_path_input, add_btn], alignment=ft.MainAxisAlignment.START, spacing=20)
             ], scroll=ft.ScrollMode.AUTO),
             padding=30,
             alignment=ft.Alignment.TOP_LEFT

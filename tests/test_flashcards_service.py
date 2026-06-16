@@ -46,7 +46,7 @@ def test_flashcard_revision_scan_folder(mock_storage, temp_flashcard_dir):
     Tests scanning a folder for flashcards and inserting them into the database.
     """
     mock_config = MagicMock()
-    mock_config.read_value.return_value = temp_flashcard_dir
+    mock_config.read_value.side_effect = lambda f, k: [temp_flashcard_dir] if k == "folder_paths" else None
     
     with patch("core.flashcards.service.StorageManager", return_value=mock_storage), \
          patch("core.flashcards.service.ConfigManager", return_value=mock_config):
@@ -63,7 +63,7 @@ def test_flashcard_revision_revise_deck(mock_storage, temp_flashcard_dir):
     Tests retrieving cards due for revision.
     """
     mock_config = MagicMock()
-    mock_config.read_value.return_value = temp_flashcard_dir
+    mock_config.read_value.side_effect = lambda f, k: [temp_flashcard_dir] if k == "folder_paths" else None
     
     with patch("core.flashcards.service.StorageManager", return_value=mock_storage), \
          patch("core.flashcards.service.ConfigManager", return_value=mock_config):

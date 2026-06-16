@@ -33,30 +33,34 @@ class FlashcardSettings:
         """
         self.config_manager = ConfigManager()
 
-    def get_folder_path(self):
+    def get_folder_paths(self):
         """
-        Retrieves the flashcard folder path from the configuration.
+        Retrieves the flashcard folder paths from the configuration.
+        Supports backward compatibility for single 'folder_path'.
 
         Takes:
             None: Uses the internal ConfigManager instance.
 
         Gives:
-            str: The path to the flashcard folder.
+            list: A list of paths to the flashcard folders.
         """
-        return self.config_manager.read_value("flashcard", "folder_path")
+        paths = self.config_manager.read_value("flashcard", "folder_paths")
+        if paths is None:
+            old_path = self.config_manager.read_value("flashcard", "folder_path")
+            return [old_path] if old_path else []
+        return paths
 
-
-    def change_folder(self, new_folder_path):
+    def update_folder_paths(self, new_paths):
         """
-        Updates the target folder and triggers a directory scan.
+        Updates the target folders and triggers a directory scan.
 
         Takes:
-            new_folder_path (str): The new path for the flashcards folder.
+            new_paths (list): The new list of paths for the flashcards folders.
 
         Gives:
             None: Updates the config and triggers a scan.
         """
-        self.config_manager.update_value("flashcard", "folder_path", new_folder_path)
+        self.config_manager.update_value("flashcard", "folder_paths", new_paths)
         FlashcardRevision().scan_folder()
 
 
@@ -329,21 +333,17 @@ class FlashcardRevision:
 
     def scan_folder(self):
         """
-        Scans the Directory and updates the flashcard table in database.
+        Scans all configured directories and updates the flashcard table in database.
 
         Takes:
-            None: Uses the configured folder path.
+            None: Uses the configured folder paths.
 
         Gives:
             None: Updates the database with discovered flashcards.
         """
         import re
-        folder_path = self.config_manager.read_value("flashcard", "folder_path")
-        if not folder_path:
-            return
-
-        if not os.path.exists(folder_path):
-            self.storage.write("DELETE FROM flashcard")
+        folder_paths = FlashcardSettings().get_folder_paths()
+        if not folder_paths:
             return
 
         existing_cards = self.storage.read("SELECT card_id, content_hash FROM flashcard")
@@ -351,64 +351,68 @@ class FlashcardRevision:
         
         discovered_ids = set()
 
-        for root, _, files in os.walk(folder_path):
-            for file in files:
-                if file.endswith(".md"):
-                    file_path = os.path.join(root, file)
-                    deck_name = os.path.splitext(file)[0]
-                    
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                    except Exception:
-                        continue
+        for folder_path in folder_paths:
+            if not os.path.exists(folder_path):
+                continue
 
-                    match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)', content, re.DOTALL)
-                    if not match:
-                        continue
-                    frontmatter, body = match.groups()
-                    
-                    tags_match = re.search(r'^tags:\s*(.*)', frontmatter, re.MULTILINE | re.IGNORECASE)
-                    if not tags_match:
-                        continue
-                    tags_line = tags_match.group(1).lower()
-                    if 'flashcards' not in tags_line:
-                        continue
-
-                    parts = re.split(r'\n#\s+', '\n' + body)
-                    for part in parts[1:]:
-                        lines = part.strip().split("\n")
-                        if not lines:
-                            continue
-                        question = lines[0].strip()
-                        answer = "\n".join(lines[1:]).strip()
+            for root, _, files in os.walk(folder_path):
+                for file in files:
+                    if file.endswith(".md"):
+                        file_path = os.path.join(root, file)
+                        deck_name = os.path.splitext(file)[0]
                         
-                        if not question:
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                content = f.read()
+                        except Exception:
                             continue
-                        
-                        id_hash = hashlib.md5(question.encode('utf-8')).hexdigest()
-                        content_hash = hashlib.md5((question + answer).encode('utf-8')).hexdigest()
-                        discovered_ids.add(id_hash)
 
-                        if id_hash in existing_map:
-                            if existing_map[id_hash] != content_hash:
+                        match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)', content, re.DOTALL)
+                        if not match:
+                            continue
+                        frontmatter, body = match.groups()
+                        
+                        tags_match = re.search(r'^tags:\s*(.*)', frontmatter, re.MULTILINE | re.IGNORECASE)
+                        if not tags_match:
+                            continue
+                        tags_line = tags_match.group(1).lower()
+                        if 'flashcards' not in tags_line:
+                            continue
+
+                        parts = re.split(r'\n#\s+', '\n' + body)
+                        for part in parts[1:]:
+                            lines = part.strip().split("\n")
+                            if not lines:
+                                continue
+                            question = lines[0].strip()
+                            answer = "\n".join(lines[1:]).strip()
+                            
+                            if not question:
+                                continue
+                            
+                            id_hash = hashlib.md5(question.encode('utf-8')).hexdigest()
+                            content_hash = hashlib.md5((question + answer).encode('utf-8')).hexdigest()
+                            discovered_ids.add(id_hash)
+
+                            if id_hash in existing_map:
+                                if existing_map[id_hash] != content_hash:
+                                    self.storage.write(
+                                        "UPDATE flashcard SET content_hash = ?, deck_name = ? WHERE card_id = ?",
+                                        (content_hash, deck_name, id_hash)
+                                    )
+                            else:
+                                now = datetime.datetime.now(datetime.timezone.utc)
+                                card = Card()
                                 self.storage.write(
-                                    "UPDATE flashcard SET content_hash = ?, deck_name = ? WHERE card_id = ?",
-                                    (content_hash, deck_name, id_hash)
+                                    """INSERT INTO flashcard (
+                                        card_id, content_hash, deck_name, stability, difficulty, 
+                                        state, next_review, last_review
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                                    (
+                                        id_hash, content_hash, deck_name, card.stability, card.difficulty,
+                                        int(card.state), now.isoformat(), now.isoformat()
+                                    )
                                 )
-                        else:
-                            now = datetime.datetime.now(datetime.timezone.utc)
-                            card = Card()
-                            self.storage.write(
-                                """INSERT INTO flashcard (
-                                    card_id, content_hash, deck_name, stability, difficulty, 
-                                    state, next_review, last_review
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                                (
-                                    id_hash, content_hash, deck_name, card.stability, card.difficulty,
-                                    int(card.state), now.isoformat(), now.isoformat()
-                                )
-                            )
         
         for old_id in existing_map.keys():
             if old_id not in discovered_ids:
@@ -438,41 +442,45 @@ class FlashcardRevision:
             
         pending_ids = set(row[0] for row in pending_records)
         
-        folder_path = self.config_manager.read_value("flashcard", "folder_path")
+        folder_paths = FlashcardSettings().get_folder_paths()
         cards_to_revise = []
         
-        if not folder_path or not os.path.exists(folder_path):
+        if not folder_paths:
             return cards_to_revise
 
-        for root, _, files in os.walk(folder_path):
-            for file in files:
-                if file.endswith(".md"):
-                    file_path = os.path.join(root, file)
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                    except Exception:
-                        continue
-                        
-                    if "tags: flashcards" not in content.lower():
-                        continue
-                        
-                    parts = content.split("# ")
-                    for part in parts[1:]:
-                        lines = part.strip().split("\n")
-                        if not lines:
+        for folder_path in folder_paths:
+            if not os.path.exists(folder_path):
+                continue
+
+            for root, _, files in os.walk(folder_path):
+                for file in files:
+                    if file.endswith(".md"):
+                        file_path = os.path.join(root, file)
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                content = f.read()
+                        except Exception:
                             continue
-                        question = lines[0].strip()
-                        answer = "\n".join(lines[1:]).strip()
-                        
-                        id_hash = hashlib.md5(question.encode('utf-8')).hexdigest()
-                        if id_hash in pending_ids:
-                            cards_to_revise.append({
-                                "id": id_hash,
-                                "question": question,
-                                "answer": answer,
-                                "deck": os.path.splitext(file)[0]
-                            })
+                            
+                        if "tags: flashcards" not in content.lower():
+                            continue
+                            
+                        parts = content.split("# ")
+                        for part in parts[1:]:
+                            lines = part.strip().split("\n")
+                            if not lines:
+                                continue
+                            question = lines[0].strip()
+                            answer = "\n".join(lines[1:]).strip()
+                            
+                            id_hash = hashlib.md5(question.encode('utf-8')).hexdigest()
+                            if id_hash in pending_ids:
+                                cards_to_revise.append({
+                                    "id": id_hash,
+                                    "question": question,
+                                    "answer": answer,
+                                    "deck": os.path.splitext(file)[0]
+                                })
                             
         return cards_to_revise
 
