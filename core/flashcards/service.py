@@ -339,7 +339,11 @@ class FlashcardRevision:
         """
         import re
         folder_path = self.config_manager.read_value("flashcard", "folder_path")
-        if not folder_path or not os.path.exists(folder_path):
+        if not folder_path:
+            return
+
+        if not os.path.exists(folder_path):
+            self.storage.write("DELETE FROM flashcard")
             return
 
         existing_cards = self.storage.read("SELECT card_id, content_hash FROM flashcard")

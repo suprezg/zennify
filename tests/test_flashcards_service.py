@@ -84,9 +84,8 @@ def test_flashcard_revision_schedule_card(mock_storage):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         mock_storage.write(
             "INSERT INTO flashcard (card_id, deck_name, stability, difficulty, state, next_review, last_review) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ("id1", "deck", 0, 0, 0, now, now)
+            ("id1", "deck", 1.0, 5.0, 1, now, now)
         )
-        
         revision = FlashcardRevision()
         revision.schdule_card("id1", 3)
         

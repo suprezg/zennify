@@ -414,7 +414,9 @@ class FlashcardDashboard:
                 None: Updates the folder path and refreshes the view.
             """
             if not os.path.exists(path_input.value):
-                snack = ft.SnackBar(ft.Text("Directory does not exist!"))
+                self.settings_service.change_folder(path_input.value)
+                self.view(selected_index=2)
+                snack = ft.SnackBar(ft.Text("Warning: Directory does not exist! Flashcards have been cleared."))
                 self.page.overlay.append(snack)
                 snack.open = True
                 self.page.update()
