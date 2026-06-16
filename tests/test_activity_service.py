@@ -61,6 +61,44 @@ def test_activity_settings_systemd_logic():
         settings.change_popup_interval_timer("1h")
         mock_config.update_value.assert_any_call("activity", "popup_interval_timer", "1h")
 
+def test_activity_settings_windows_logic():
+    """
+    Tests configuration updates and Windows Task Scheduler generation (mocked).
+    """
+    config_values = {
+        ("system", "project_root"): "C:\\project",
+        ("activity", "popup_interval_timer"): "30m",
+        ("activity", "service_status"): True
+    }
+    mock_config = MagicMock()
+    mock_config.read_value.side_effect = lambda f, k: config_values.get((f, k))
+    
+    def mock_update(f, k, v):
+        config_values[(f, k)] = v
+    mock_config.update_value.side_effect = mock_update
+
+    with patch("core.activity.service.ConfigManager", return_value=mock_config), \
+         patch("core.activity.service.subprocess.run") as mock_run, \
+         patch("core.activity.service.os.name", "nt"), \
+         patch("core.activity.service.os.path.join", side_effect=lambda *args: "\\".join(args)):
+        
+        settings = ActivitySettings()
+        
+        # Test toggle_service on Windows
+        settings.toggle_service(True)
+        mock_run.assert_any_call(["schtasks", "/change", "/tn", "ZennifyActivityTask", "/enable"], check=True, capture_output=True)
+        assert config_values[("activity", "service_status")] is True
+        
+        # Test change_popup_interval_timer on Windows
+        settings.change_popup_interval_timer("1h")
+        assert config_values[("activity", "popup_interval_timer")] == "1h"
+        
+        # Verify _generate_windows_task calls with updated interval
+        mock_run.assert_any_call(
+            ["schtasks", "/create", "/tn", "ZennifyActivityTask", "/tr", '"C:\\project\\tools\\windows\\zennify.bat" --activity-popup', "/sc", "hourly", "/mo", "1", "/f"],
+            check=True, capture_output=True
+        )
+
 def test_activity_statistics_overview(mock_storage):
     """
     Tests generation of statistics and charts (mocked base64).

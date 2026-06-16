@@ -101,6 +101,42 @@ class ActivitySettings:
         """
         self.config_manager = ConfigManager()
 
+    def _generate_windows_task(self):
+        """
+        Regenerates the Windows Task Scheduler entry based on current configuration.
+
+        Takes:
+            None: Reads values from the configuration manager.
+
+        Gives:
+            None: Executes schtasks commands to update the task.
+        """
+        project_root = self.config_manager.read_value("system", "project_root")
+        interval = self.config_manager.read_value("activity", "popup_interval_timer") or "30m"
+        task_name = "ZennifyActivityTask"
+        
+        if project_root:
+            zennify_bat = os.path.join(project_root, "tools", "windows", "zennify.bat")
+            
+            if interval.endswith("m"):
+                sc = "minute"
+                mo = interval.replace("m", "")
+            elif interval.endswith("h"):
+                sc = "hourly"
+                mo = interval.replace("h", "")
+            else:
+                sc = "minute"
+                mo = "30"
+
+            try:
+                create_cmd = ["schtasks", "/create", "/tn", task_name, "/tr", f'"{zennify_bat}" --activity-popup', "/sc", sc, "/mo", mo, "/f"]
+                subprocess.run(create_cmd, check=True, capture_output=True)
+                
+                if not self.config_manager.read_value("activity", "service_status"):
+                    subprocess.run(["schtasks", "/change", "/tn", task_name, "/disable"], check=True, capture_output=True)
+            except subprocess.CalledProcessError:
+                pass
+
     def _generate_systemd_files(self):
         """
         Regenerates the systemd service and timer files based on current configuration.
@@ -152,39 +188,49 @@ WantedBy=timers.target
 
     def toggle_service(self, enable):
         """
-        Enables or disables the background systemd timer for activity logging.
+        Enables or disables the background timer for activity logging.
 
         Takes:
             enable (bool): True to enable and start the service, False to disable and stop it.
 
         Gives:
-            None: Executes systemctl commands and updates configuration.
+            None: Executes OS-specific commands and updates configuration.
         """
         state = "enable" if enable else "disable"
-        try:
-            subprocess.run(["systemctl", "--user", state, "--now", "zennify-activity.timer"], check=True)
-            self.config_manager.update_value("activity", "service_status", enable)
-        except subprocess.CalledProcessError:
-            pass
+        if os.name == "nt":
+            try:
+                subprocess.run(["schtasks", "/change", "/tn", "ZennifyActivityTask", f"/{state}"], check=True, capture_output=True)
+                self.config_manager.update_value("activity", "service_status", enable)
+            except subprocess.CalledProcessError:
+                pass
+        else:
+            try:
+                subprocess.run(["systemctl", "--user", state, "--now", "zennify-activity.timer"], check=True)
+                self.config_manager.update_value("activity", "service_status", enable)
+            except subprocess.CalledProcessError:
+                pass
 
     def change_popup_interval_timer(self, new_interval):
         """
-        Updates the popup interval timer and regenerates associated systemd files.
+        Updates the popup interval timer and regenerates associated background tasks.
 
         Takes:
             new_interval (str): The new timer interval (e.g., '1h', '45m').
 
         Gives:
-            None: Updates configuration, regenerates files, and restarts the timer.
+            None: Updates configuration, regenerates files/tasks, and restarts if necessary.
         """
         self.config_manager.update_value("activity", "popup_interval_timer", new_interval)
-        self._generate_systemd_files()
         
-        if self.config_manager.read_value("activity", "service_status"):
-            try:
-                subprocess.run(["systemctl", "--user", "restart", "zennify-activity.timer"], check=True)
-            except subprocess.CalledProcessError:
-                pass
+        if os.name == "nt":
+            self._generate_windows_task()
+        else:
+            self._generate_systemd_files()
+            if self.config_manager.read_value("activity", "service_status"):
+                try:
+                    subprocess.run(["systemctl", "--user", "restart", "zennify-activity.timer"], check=True)
+                except subprocess.CalledProcessError:
+                    pass
 
     def change_popup_visible_timer(self, new_timer):
         """
