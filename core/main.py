@@ -4,7 +4,10 @@ Purpose: Direct traffic to the correct feature dashboard within the Zennify ecos
 """
 
 import sys
+import os
+import shutil
 import flet as ft
+from core.shared.configurator import ConfigManager
 
 
 def show_help():
@@ -27,6 +30,8 @@ def show_help():
     print("  --pomodoro        Launch the Pomodoro Timer Dashboard")
     print("  --shop            Launch the Reward Shop")
     print("  --bankrupt        Initiate the Bankruptcy declaration process")
+    print("  --backup <path>   Create a backup of the database at the specified path")
+    print("  --restore <path>  Restore the database from a backup file")
     print("  --help            Show this help message")
 
 
@@ -84,6 +89,45 @@ if __name__ == "__main__":
     elif args[0] == "--bankrupt":
         from core.shared.wallet import WalletManager
         WalletManager().declare_bankrupt()
+    elif args[0] == "--backup":
+        if len(args) < 2:
+            print("Error: --backup requires a destination path.")
+            sys.exit(1)
+            
+        backup_path = args[1]
+        db_path = ConfigManager().read_value("system", "database_path")
+        
+        if not db_path or not os.path.exists(db_path):
+            print("Error: Database file not found.")
+            sys.exit(1)
+            
+        try:
+            shutil.copy2(db_path, backup_path)
+            print(f"Backup created successfully at '{backup_path}'.")
+        except Exception as e:
+            print(f"Error creating backup: {e}")
+            sys.exit(1)
+    elif args[0] == "--restore":
+        if len(args) < 2:
+            print("Error: --restore requires a path to the backup file.")
+            sys.exit(1)
+            
+        backup_path = args[1]
+        if not os.path.exists(backup_path):
+            print(f"Error: Backup file not found at '{backup_path}'.")
+            sys.exit(1)
+            
+        confirm = input(f"Are you sure you want to restore the database from '{backup_path}'? This will overwrite the current database. [y/n]: ")
+        if confirm.lower() == 'y':
+            db_path = ConfigManager().read_value("system", "database_path")
+            if db_path:
+                shutil.copy2(backup_path, db_path)
+                print("Database restored successfully.")
+            else:
+                print("Error: Could not retrieve the current database path from configuration.")
+                sys.exit(1)
+        else:
+            print("Restore cancelled.")
     elif args[0] in gui_modes:
         ft.run(main)
     else:
