@@ -25,7 +25,7 @@ echo Virtual Environment Created
 echo Installing Dependencies...
 call "%VENV_PATH%\Scripts\activate.bat"
 if exist "%PROJECT_ROOT%\tools\dependencies.txt" (
-    pip install -q --upgrade pip uv
+    python -m pip install -q --upgrade pip uv
     uv pip install -r "%PROJECT_ROOT%\tools\dependencies.txt"
 ) else (
     echo Warning: %PROJECT_ROOT%\tools\dependencies.txt not found.
