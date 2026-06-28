@@ -1,6 +1,6 @@
 # Zennify
 <p align="center">
-    <img src="./banner.png" alt="Zennify Banner">
+    <img src="./assets/banner.png" alt="Zennify Banner">
     <br />
     <br />
     <img src="https://img.shields.io/badge/Python-3.12+-blue?style=for-the-badge" alt="Python Version">
