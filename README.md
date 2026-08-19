@@ -10,6 +10,9 @@
     <i>A hardcore, gamified productivity suite for deep work</i>
 </p>
 
+> [!NOTE]
+> **Active Development:** This project is currently a work in progress and is being actively buil!
+
 ## Abstract
 
 Zennify is a comprehensive, gamified productivity ecosystem built with Python and Flet. It integrates activity logging, spaced-repetition flashcards, hardcore todo management, and Pomodoro timers into a single, cohesive experience. By introducing a unified virtual economy, Zennify transforms mundane tasks into rewarding challenges, helping users maintain long-term focus and consistency.
