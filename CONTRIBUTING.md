@@ -35,7 +35,7 @@ Gives:
 
 ## Branching & Commits
 
-* Branch Naming: Use feature/ or defectfix/ or documentation/ or improvement/ prefixes for your branch names.
+* Branch Naming: Use feature/ or defectfix/ or documentation/ or improvement/ or infra/ prefixes for your branch names.
 * Commit Messages: Follow the Conventional Commits specification (e.g., feat: add login).
 * Atomic Commits: Keep your commits small and focused on a single change.
 
