@@ -1,0 +1,68 @@
+syntax = component
+
+Component: "Axum Host Server & Endpoint Adapters"
+
+    Note: [[
+    Provides HTTP REST and WebSocket interface ports for client interaction, state synchronization, health monitoring, and form-factor specific Backend-For-Frontend (BFF) payload transformation.
+    ]]
+
+    Diagram: "Axum Server Endpoint Routing & BFF Wrapper" [[
+    graph TD
+        A[Client HTTP/WS Request] --> B[Axum Router & Auth Middleware]
+        B --> C{Endpoint Route}
+        C -- POST /api/v1/sync --> D[Sync Endpoint Adapter]
+        C -- GET /api/v1/health --> E[Health Monitoring Adapter]
+        C -- WS /ws/stream --> F[WebSocket Push Adapter]
+        D --> G[Domain Hexagonal Port]
+        G --> H[BFF Form-Factor Transformer]
+        H -- Mobile/Desktop --> I[Compile Full Structural Payload]
+        H -- Slint Embedded --> J[Compile Slim Execution Payload]
+    ]]
+
+    Invariants:
+        * "All incoming REST and WebSocket sync connections must pass authentication verification."
+        * "Endpoint responses must enforce form-factor payload customization via the BFF adapter layer."
+
+    Non-Functional:
+        * "API response latency for local Wi-Fi sync requests must not exceed 50ms P99."
+        * "The server must support concurrent sync handling across desktop, mobile, and embedded devices without thread starvation."
+
+    Models:
+        Model: "HttpRequestEnvelope"
+            Type: "Struct"
+            Members:
+                * "client_id: String (UUID)"
+                * "device_type: Enum (Desktop, Mobile, EmbeddedSlint)"
+                * "auth_token: String"
+                * "payload: Vector of Bytes / JSON"
+
+        Model: "HttpResponseEnvelope"
+            Type: "Struct"
+            Members:
+                * "status_code: u16"
+                * "server_version: u64"
+                * "payload: Binary / Compressed JSON"
+
+    Contracts:
+        Contract: "HandleSyncEndpoint"
+            Signature: "pub async fn handle_sync(req: HttpRequestEnvelope) -> Result<HttpResponseEnvelope, ServerError>"
+            Inputs:
+                * "req: Inbound HTTP Request Envelope containing client logs and device metadata"
+            Outputs:
+                * "HttpResponseEnvelope: Tailored response payload with new system version"
+            Requires:
+                * "Client authorization header is valid and active"
+            Ensures:
+                * "Client payload is forwarded to the Sync Flush Engine"
+                * "BFF adapter transforms domain state diff into target device form factor format"
+            Precondition:
+                * "Network socket connection is open and responsive"
+            Postcondition:
+                * "Server returns updated global system version and state differential payload"
+            Process:
+                1. "Extract authentication token and device metadata from request header."
+                2. "Validate client token against security credentials."
+                3. "Parse incoming transaction logs from request body."
+                4. "Dispatch transaction logs to the Core Domain Hexagonal Port."
+                5. "Invoke BFF Adapter to filter output payload based on device_type."
+                6. "Serialize BFF response and return HTTP 200 OK with server version."

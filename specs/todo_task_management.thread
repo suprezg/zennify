@@ -1,0 +1,112 @@
+syntax = behavior
+
+Feature: "Todo Task Management"
+
+    Note: [[
+    As a User
+    I want to create, manage, and complete time-bound tasks with financial consequences
+    So that I stay accountable to my commitments through gamified rewards and penalties
+    ]]
+
+    Diagram: "Todo Task State Machine" [[
+    stateDiagram-v2
+        [*] --> TaskFormInput
+        TaskFormInput --> LimitCheck: Submit
+        LimitCheck --> ConfirmationModal: Under Limit
+        LimitCheck --> BlockedExceeded: Exceeds Limit (5)
+        ConfirmationModal --> PendingTaskSaved: User Clicks Continue
+        ConfirmationModal --> FormAborted: User Clicks Cancel
+        PendingTaskSaved --> TaskCompleted: User Completes Before Deadline
+        PendingTaskSaved --> TaskFailed: Deadline Passes Uncompleted
+        PendingTaskSaved --> RescheduleModal: User Clicks Reschedule (Max 1)
+        RescheduleModal --> DeadlineUpdated: User Confirms Reschedule
+        RescheduleModal --> RescheduleAborted: User Cancels Modal
+        TaskCompleted --> AwardCoins: Add Wallet Reward
+        TaskFailed --> DeductCoins: Deduct Wallet Penalty
+    ]]
+
+    Background: "Todo Limit Configuration"
+        Given "the active todo limit is configured by the user"
+
+    Rule: "Tasks can be created within configured limits, sorted by deadline, and never deleted"
+
+        Scenario: "Creating a new todo task within the allowed limit and confirming creation"
+            Given "the user has fewer running todo tasks than their configured limit"
+            When "the user inputs a new todo name and a specific deadline date"
+            Then "a creation confirmation box appears displaying the todo name and deadline date"
+            And "the confirmation box offers \"Cancel\" and \"Continue\" options"
+
+        Scenario: "Continuing with the creation of a new todo task"
+            Given "the creation confirmation box is displayed for a new task"
+            When "the user clicks the \"Continue\" button"
+            Then "the task is successfully saved as pending in the database"
+            And "the system routes back to the main interface"
+            And "the option to delete the task remains unavailable"
+
+        Scenario: "Canceling the creation of a new todo task"
+            Given "the creation confirmation box is displayed for a new task"
+            When "the user clicks the \"Cancel\" button"
+            Then "the task creation sequence is aborted without saving data"
+            And "the system returns to the main creation page allowing the user to create a different item"
+
+        Scenario: "Preventing task creation when exceeding the configured limit"
+            Given "the user has reached their configured limit of \"5\" running todo tasks"
+            When "the user attempts to create a new todo task"
+            Then "the system blocks the creation and requests the user to clear existing tasks"
+
+        Scenario: "Displaying todo tasks sorted by deadline urgency"
+            When "the user views their current todo list panel"
+            Then "the pending tasks are displayed in ascending order of their deadlines"
+            And "the task closest to its deadline is positioned at the top"
+            And "the task farthest from its deadline is positioned at the bottom"
+
+    Rule: "Tasks can be rescheduled only once using an explicit secondary confirmation step"
+
+        Scenario: "Triggering the rescheduling flow for a task"
+            Given "the user has a pending todo task that has never been rescheduled"
+            When "the user clicks the reschedule button positioned right next to the todo item"
+            Then "a date picker popup appears on the screen"
+            When "the user selects a new target date from the picker popup"
+            Then "a confirmation box appears displaying the previous deadline alongside the newly selected deadline"
+            And "the confirmation box offers \"Cancel\" and \"Continue\" options"
+
+        Scenario: "Continuing with the rescheduling update"
+            Given "a rescheduling confirmation box is open displaying the old and new deadlines"
+            When "the user clicks the \"Continue\" button"
+            Then "the new deadline is saved successfully"
+            And "the task is marked as no longer eligible for rescheduling"
+            And "the system closes the modal and returns to the main page update state"
+
+        Scenario: "Canceling the rescheduling action"
+            Given "a rescheduling confirmation box is open displaying the old and new deadlines"
+            When "the user clicks the \"Cancel\" button"
+            Then "the original deadline modifications are completely discarded"
+            And "the task retains its original deadline profile"
+            And "the system safely returns the interface back to the main list page"
+
+        Scenario: "Attempting to reschedule a todo task more than once"
+            Given "the user has a pending todo task that has already been rescheduled once"
+            When "the user attempts to click the reschedule button or change the deadline again"
+            Then "the system prevents the modification and enforces the current deadline"
+
+    Rule: "Task completion states trigger automatic financial rewards or penalties"
+
+        Scenario: "Successfully completing a todo task before the deadline"
+            Given "the user has a pending todo task"
+            When "the user marks the task as completed before the deadline expires"
+            Then "the task status is updated to successful"
+            And "predefined reward coins are added to the user's wallet"
+
+        Scenario: "Missing a todo task deadline"
+            Given "the user has a pending todo task"
+            When "the task deadline passes without completion"
+            Then "the task status automatically shifts to failed"
+            And "predefined penalty coins are deducted from the user's wallet"
+
+    Rule: "Pending tasks are brought to the user's attention upon system startup if reminders are active"
+
+        Scenario: "Displaying pending tasks on initial system boot"
+            Given "the system reminder service is enabled by the user"
+            When "the user starts their computer and opens the application"
+            And "thirty seconds have elapsed"
+            Then "a popup appears summarizing all pending todo tasks alongside their remaining deadlines"

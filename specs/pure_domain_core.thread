@@ -1,0 +1,100 @@
+syntax = component
+
+Component: "Pure Domain Core & Algorithmic Engine"
+
+    Note: [[
+    Encapsulates core business domain algorithms including FSRS spaced repetition scheduling, economy wallet balancing, streak/multiplier rules, and penalty ratio verification. Has zero dependencies on web libraries or network frameworks.
+    ]]
+
+    Diagram: "Pure Domain Core Architecture" [[
+    graph TD
+        A[External Application Ports] --> B[Pure Rust Domain Hexagonal Layer]
+        B --> C[FSRS Spaced Repetition Engine]
+        B --> D[Economy Wallet & Bankruptcy Engine]
+        B --> E[Habit & Todo Rule Evaluator]
+        B --> F[Pomodoro Streak Engine]
+        C --> G[Pure Immutable State Mutations]
+        D --> G
+        E --> G
+        F --> G
+    ]]
+
+    Invariants:
+        * "Domain core must have zero dependencies on Axum, Tokio, SQLx, or web network crates."
+        * "Economy penalty deduction rate must never be less than the successful completion reward rate."
+
+    Non-Functional:
+        * "FSRS memory interval computation must execute in less than 1 microsecond per card."
+        * "All domain state calculations must be 100% deterministic given identical input parameters."
+
+    Models:
+        Model: "FsrsCardState"
+            Type: "Struct"
+            Members:
+                * "card_id: String"
+                * "stability: f64"
+                * "difficulty: f64"
+                * "elapsed_days: u32"
+                * "scheduled_days: u32"
+                * "reps: u32"
+                * "lapses: u32"
+                * "state: Enum (New, Learning, Review, Relearning)"
+
+        Model: "FsrsRating"
+            Type: "Enum"
+            Members:
+                * "Again (1)"
+                * "Hard (2)"
+                * "Good (3)"
+                * "Easy (4)"
+
+        Model: "EconomyConfig"
+            Type: "Struct"
+            Members:
+                * "completion_reward: i64"
+                * "failure_penalty: i64"
+                * "base_multiplier: f64"
+
+    Contracts:
+        Contract: "CalculateFsrsNextReview"
+            Signature: "pub fn calculate_fsrs_next_review(card: &FsrsCardState, rating: FsrsRating) -> FsrsCardState"
+            Inputs:
+                * "card: Current FSRS memory stability and difficulty metrics"
+                * "rating: User recall performance grading (Again, Hard, Good, Easy)"
+            Outputs:
+                * "FsrsCardState: Updated FSRS state struct with recalculated stability, difficulty, and next scheduled interval"
+            Requires:
+                * "Rating value is a valid FsrsRating enum variant"
+            Ensures:
+                * "Updated card stability increases on Good/Easy and decreases on Again"
+            Precondition:
+                * "Card metrics contain valid non-negative float values"
+            Postcondition:
+                * "New scheduled_days interval is strictly greater than zero for Good/Easy grades"
+            Process:
+                1. "Compute new difficulty metric based on previous difficulty and rating."
+                2. "Compute new stability metric based on previous stability, difficulty, and recall success."
+                3. "Calculate next scheduled review interval in days."
+                4. "Advance card state from Learning to Review if recall criteria met."
+                5. "Return updated FsrsCardState struct."
+
+        Contract: "ValidateEconomyRates"
+            Signature: "pub fn validate_economy_rates(reward: i64, penalty: i64) -> Result<(), EconomyError>"
+            Inputs:
+                * "reward: Proposed coin reward amount for successful completions"
+                * "penalty: Proposed coin deduction amount for failed deadlines or missed habits"
+            Outputs:
+                * "Result<(), EconomyError>: Ok if valid, or EconomyError::PenaltyLessThanReward error"
+            Requires:
+                * "Reward value is positive (> 0)"
+            Ensures:
+                * "Penalty deduction magnitude is greater than or equal to reward value"
+            Precondition:
+                * "Economy configuration form is submitted"
+            Postcondition:
+                * "System updates transactional rule bounds if validation passes"
+            Process:
+                1. "Check if reward > 0."
+                2. "Check if penalty >= reward."
+                3. "If penalty < reward, return Err(EconomyError::PenaltyLessThanReward)."
+                4. "Return Ok(())."

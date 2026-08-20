@@ -1,0 +1,56 @@
+syntax = behavior
+
+Feature: "Activity Insights Dashboard"
+
+    Note: [[
+    As a User
+    I want to view my performance metrics, habit streaks, and visual activity breakdowns
+    So that I can understand my time utilization patterns and stay motivated
+    ]]
+
+    Diagram: "Activity Insights Data Flow" [[
+    graph TD
+        A[Activity Logs & Ratings] --> B[Insights Calculation Engine]
+        B --> C[Streaks & Multipliers]
+        B --> D[Productivity Pie Chart]
+        B --> E[Activity Mix Radar Chart]
+        B --> F[Tag Frequency Bar Chart]
+        B --> G[Daily Heatmap Grid]
+    ]]
+
+    Background: "Logged Activity Context"
+        Given "the user has logged past activities with tags and productivity ratings"
+        And "the user navigates to the Insights Dashboard view"
+
+    Rule: "Gamification metrics summarize user consistency and earnings momentum"
+
+        Scenario: "Displaying streak and multiplier metrics"
+            Then "the dashboard should display the user's current activity streak"
+            And "the dashboard should display the active coin multiplier"
+
+    Rule: "Visual charts analyze activity distribution with contextual summaries"
+
+        Scenario: "Interacting with the daily activity heatmap"
+            Then "the dashboard displays a daily activity heatmap grid"
+            When "the user clicks on a specific day's grid block"
+            Then "a dialog box opens showing a list of activities tracked on that day"
+            And "the list displays the description, selected tags, and productivity rating for each activity"
+
+        Scenario: "Viewing productivity time distribution"
+            Then "the dashboard displays a \"Productivity Ratio\" pie chart"
+            And "a summary explanation sentence interpreting the ratio is displayed alongside the chart"
+
+        Scenario: "Viewing top activity habits"
+            Then "the dashboard displays an \"Activity Mix\" radar chart showing the top 5 tags"
+            And "an insight sentence summarizing the dominant habit patterns is displayed alongside the chart"
+
+        Scenario: "Viewing comprehensive tag usage"
+            Then "the dashboard displays a \"Detailed Tag Frequency\" bar chart covering all recorded tags"
+            And "an explanatory breakdown of tag frequencies is displayed alongside the chart"
+
+    Rule: "Dashboard data responds dynamically to date filtering"
+
+        Scenario: "Filtering dashboard insights by date range"
+            When "the user sets the date filter from \"2026-06-01\" to \"2026-06-07\""
+            Then "all dashboard metrics, charts, and contextual explanations update to reflect only activities within that week"
+            But "data outside of the selected date range is excluded from the calculations"

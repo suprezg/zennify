@@ -1,0 +1,160 @@
+syntax = behavior
+
+Feature: "Flashcard Revision Manager"
+
+    Note: [[
+    As a User
+    I want to scan markdown directories to generate, filter, and practice flashcards based on scheduled intervals
+    So that I can optimize my long-term memory retention through structured active recall sessions
+    ]]
+
+    Diagram: "Flashcard Directory Scanning & Recall Session" [[
+    graph TD
+        A[Configured Directories max 10] --> B[Background Markdown Parser]
+        B --> C{Card Mutation Diff}
+        C -- Answer Modified --> D[Create New Card Instance & Reset Intervals]
+        C -- Text Modified --> E[Update Card Wording & Keep Metadata]
+        C -- Deleted --> F[Purge Card & History]
+        B --> G[Revision Group List]
+        G --> H{Start Review Session}
+        H --> I[Show Question]
+        I --> J[User Clicks Show Answer]
+        J --> K{Grade Response}
+        K -- Again / Hard / Good / Easy --> L[Submit to FSRS Algorithm]
+        L --> M{More Pending Cards?}
+        M -- Yes --> I
+        M -- No --> N[All Done Screen & Award Wallet Coins]
+    ]]
+
+    Rule: "Directory configuration and automatic scanning populate the revision list or handle empty states"
+
+        Scenario: "Adding or removing a directory triggers a full library rescan"
+            Given "the user is on the settings page"
+            When "the user adds a new directory path or removes an existing one"
+            Then "the system initiates a full background rescan of all configured folders"
+            And "the revision lists are updated based on the discovered markdown files"
+
+        Scenario: "Handling the main page display when no directory paths are configured"
+            Given "the user has not configured any directory paths"
+            Or "the user has removed all existing directory paths from the settings"
+            When "the user views the main page"
+            Then "the main page displays a \"No Flashcards Found\" message box"
+            And "the interactive revision groups list is completely hidden"
+
+        Scenario: "Handling the main page display when folders contain no flashcards"
+            Given "the user has configured at least one directory path"
+            When "a rescan finishes and finds no valid flashcard files within the paths"
+            Then "the main page displays a \"No Flashcards Found\" message box"
+            And "the interactive revision groups list does not appear"
+
+        Scenario: "Visual feedback during an automated or manual rescan on the main screen"
+            Given "the user is viewing the main screen"
+            When "a scheduled background interval rescan triggers"
+            Or "the user manually requests a library rescan"
+            Then "a dialog appears stating \"Rescanning for flashcards revision\""
+            And "the dialog automatically closes once the scan completes"
+
+        Scenario: "Restricting the maximum number of connected directories"
+            Given "the user has already configured \"10\" distinct directory paths"
+            When "the user attempts to add an additional directory path"
+            Then "the system blocks the addition and enforces the maximum limit"
+
+        Scenario: "Displaying revision groups based on markdown filenames"
+            Given "a rescan has successfully discovered valid flashcard files"
+            Then "the main page displays an interactive list of available revision groups named after the scanned markdown files"
+            And "the list includes an option to select \"ALL\" groups combined"
+
+    Rule: "Rescanning synchronizes file modifications, additions, and structural removals with the database"
+
+        Scenario: "Modifying a question's answer resets historical metrics by creating a new flashcard instance"
+            When "the user updates the answer text of an existing question within a markdown file"
+            And "a rescan occurs"
+            Then "the system removes the old flashcard records from the database"
+            And "a new flashcard instance containing the updated answer is created with reset memory intervals"
+
+        Scenario: "Modifying a question's text preserves historical review metadata"
+            When "the user updates the wording of an existing question while keeping its original answer structural mapping intact"
+            And "a rescan occurs"
+            Then "the updated question text is applied in the database"
+            But "the existing revision metrics and memory stability metrics for that card remain unchanged"
+
+        Scenario: "Deleting a flashcard from a markdown file removes it entirely from the system"
+            Given "a flashcard exists in the database from a previous scan"
+            When "the user deletes the flashcard text from its respective markdown file"
+            And "a rescan occurs"
+            Then "the system purges the flashcard and its historical metadata entirely from the database"
+
+    Rule: "Interactive flashcard review loops enforce active recall behaviors and process micro-saves"
+
+        Scenario: "Attempting to revise a group with no outstanding cards due"
+            When "the user selects a revision group that has zero pending cards"
+            And "the user clicks the \"Revise\" button"
+            Then "a popup appears explaining that there are no flashcards currently pending for revision"
+
+        Scenario: "Initiating a pending flashcard revision session"
+            Given "the selected revision group has pending cards due"
+            When "the user clicks the \"Revise\" button"
+            Then "a revision popup opens displaying the first question at the top"
+            And "the total count of remaining pending flashcards in this group is displayed"
+            And "the answer remains hidden from view"
+
+        Scenario: "Revealing the answer and submitting performance evaluation"
+            Given "a revision session popup is open and displaying a question"
+            When "the user clicks the \"Show\" button"
+            Then "the answer is revealed"
+            And "four grading options become available: \"Again\", \"Hard\", \"Good\", and \"Easy\""
+            When "the user selects one of the four grading options"
+            Then "the current card is submitted to the scheduling algorithm"
+            And "the popup immediately loads the next pending flashcard in the loop"
+
+        Scenario: "Exiting a session mid-loop dynamically updates the main menu pending count"
+            Given "the user selects a group showing \"4\" pending revision cards"
+            And "the user clicks the back arrow icon at the top to exit to the menu"
+            When "the user completes and grades exactly \"2\" flashcards"
+            And "the user clicks the back arrow icon at the top to exit to the menu"
+            Then "the revision loop closes safely"
+            And "the main menu dynamically updates to display exactly \"2\" pending cards remaining for that group"
+
+        Scenario: "Completing a group flashcard revision loop"
+            Given "the user is on the final remaining pending flashcard of the selected group loop"
+            When "the user selects a grading option for the final card"
+            Then "the popup displays an \"All Done\" completion message"
+            And "the user can click an \"Okay\" button to close the panel and return to the main page"
+
+    Rule: "Schedule tracking drawer provides comprehensive workload transparency"
+
+        Scenario: "Viewing the upcoming revision timeline drawer"
+            Given "the user is on the main dashboard screen"
+            When "the user clicks the schedule button"
+            Then "a sliding drawer panel opens on the screen"
+            And "the drawer displays a comprehensive list of all system flashcards scheduled for revision"
+            And "each entry displays the flashcard details alongside its exact upcoming calendar due date"
+
+    Rule: "Global complete revision loops reward coins and manage daily strict milestone streaks"
+
+        Scenario: "Earning coins upon completing a full comprehensive revision loop"
+            Given "the user selects the \"ALL\" group option representing every due card across the entire collection"
+            When "the user goes through the active recall loop and successfully completes all outstanding cards"
+            Then "a predefined reward of coins is added to the user's wallet balance"
+            And "no option for wallet coin deductions is ever executed by the module"
+
+        Scenario: "Advancing the streak and multiplier for completing the entire due collection once a day"
+            Given "a calendar day has cards outstanding and due for revision"
+            And "the user has not completed a full comprehensive loop yet today"
+            When "the user clears all outstanding cards across the entire collection for this date"
+            Then "the user's daily revision streak increments by 1"
+            And "the active coin multiplier advances for the day"
+            And "subsequent individual group loops completed on the same date do not advance the streak further"
+
+        Scenario: "Preserving streaks when no cards are scheduled for the day"
+            Given "a new calendar day begins"
+            And "the system checks the scheduling engine and finds zero flashcards are due or outstanding for the entire day"
+            When "the day rolls over without any user revision activity"
+            Then "the user's revision streak and active coin multiplier are preserved exactly as they are without resetting"
+
+        Scenario: "Resetting streaks on missed active workloads without executing coin deductions"
+            Given "a calendar day begins where flashcards are actively scheduled and due for revision"
+            When "the day expires and rolls over without the user completing a full comprehensive loop of the due cards"
+            Then "the user's revision streak resets back to 0"
+            And "the active coin multiplier resets back to its baseline value"
+            But "the user's wallet coin balance is fully preserved without any penalties"

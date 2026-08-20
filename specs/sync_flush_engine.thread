@@ -1,0 +1,80 @@
+syntax = component
+
+Component: "State Convergence & Sync Flush Engine"
+
+    Note: [[
+    Coordinates state-based operational log convergence, Last-Write-Wins (LWW) element graph resolution, Hybrid Logical Clock (HLC) tick propagation, and global system version cache invalidation.
+    ]]
+
+    Diagram: "Sync Flush & LWW Convergence Engine" [[
+    graph TD
+        A[Inbound Client OpLogs & HLC] --> B[Hybrid Logical Clock Synchronization]
+        B --> C[Validate Vector Timestamp vs Client Last Known Version]
+        C --> D{Version Match?}
+        D -- Match --> E[Serve Cached Differential Payload]
+        D -- Mismatch --> F[Execute LWW Conflict Resolution]
+        F --> G[Commit Converged State to Primary Database]
+        G --> H[Increment Global System Version]
+        H --> I[Bust Server Cache & Build Fresh Differential Payload]
+        I --> J[Return Payload & Updated Vector Checkpoint]
+    ]]
+
+    Invariants:
+        * "Global System Version must monotonically increment on every valid write flush."
+        * "Operational log entries must be applied strictly in Last-Write-Wins order evaluated by HLC timestamps."
+
+    Non-Functional:
+        * "Conflict resolution for 1,000 pending operational transactions must execute within 20ms."
+        * "Memory footprint of in-flight execution queues must remain bounded under 32MB."
+
+    Models:
+        Model: "OpLogEntry"
+            Type: "Struct"
+            Members:
+                * "id: String (UUID v4)"
+                * "hlc_timestamp: HybridLogicalClock"
+                * "entity_type: String (Task, Habit, Flashcard, Economy)"
+                * "mutation_type: Enum (Create, Update, Delete)"
+                * "payload: String (JSON / Binary)"
+
+        Model: "HybridLogicalClock"
+            Type: "Struct"
+            Members:
+                * "physical_time: u64"
+                * "logical_counter: u32"
+                * "node_id: String"
+
+        Model: "SyncStateResult"
+            Type: "Struct"
+            Members:
+                * "new_global_version: u64"
+                * "applied_count: usize"
+                * "rejected_count: usize"
+                * "diff_payload: Vector of u8"
+
+    Contracts:
+        Contract: "ReconcileOpLogs"
+            Signature: "pub fn reconcile_op_logs(client_logs: Vec<OpLogEntry>, client_version: u64) -> Result<SyncStateResult, SyncError>"
+            Inputs:
+                * "client_logs: Batch of un-synced operational transaction log entries from client"
+                * "client_version: Monotonic version integer sent by client"
+            Outputs:
+                * "SyncStateResult: Resolution summary with incremented version and differential payload"
+            Requires:
+                * "Client log batch is sorted by HLC timestamp ascending"
+            Ensures:
+                * "Non-conflicting structural operations are persisted into host SQLite"
+                * "global_system_version increments if any mutation is committed"
+            Precondition:
+                * "Database lock is acquired for transaction stream"
+            Postcondition:
+                * "All applied log signatures are flagged as synchronized"
+            Process:
+                1. "Advance local HLC clock to max(local_hlc, client_hlc)."
+                2. "Check if client_version matches host global_system_version."
+                3. "If versions match and cache is warm, return cached diff immediately."
+                4. "Iterate through client_logs and compare HLC signatures against host entity table."
+                5. "Apply LWW rule: if client log HLC > host entity HLC, update host state."
+                6. "Increment host global_system_version counter."
+                7. "Invalidate server response cache."
+                8. "Return SyncStateResult with updated version and payload."

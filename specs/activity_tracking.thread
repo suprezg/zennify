@@ -1,0 +1,61 @@
+syntax = behavior
+
+Feature: "Tracking and Tagging"
+
+    Note: [[
+    As a User
+    I want my daily activities to be logged with relevant tags and productivity status
+    So that I can earn gamification rewards and accurately capture how I spend my time
+    ]]
+
+    Diagram: "Activity Logging Decision Tree" [[
+    graph TD
+        A[Interval Timer Trigger] --> B{User Active?}
+        B -- Yes --> C[Display Activity Prompt]
+        B -- No --> D[Wait for Response Timeout]
+        C --> E{User Form Action}
+        E -- Submit Productive --> F[Save Activity & Award Coins]
+        E -- Submit Unproductive --> G[Save Activity & Deduct Coins]
+        E -- Default / Missing --> H[Save Default Activity & 0 Coins]
+        D -- Timeout Expired --> H
+    ]]
+
+    Background: "Service Configuration"
+        Given "the activity tracking service is active"
+        And "the tracking interval and idle waiting period are configured"
+
+    Rule: "Users must be prompted to log activities after an interval"
+
+        Scenario: "Prompting the user for activity details"
+            Given "the user is active at the device"
+            When "the tracking interval elapses"
+            Then "an activity prompt appears displaying the remaining response time"
+            And "the prompt allows the user to enter a description, select or add tags, and choose a productivity rating"
+
+    Rule: "Completing activity details updates wallet coins based on productivity rating"
+
+        Scenario: "Earning coins for productive activities"
+            Given "the activity prompt is displayed"
+            When "the user logs an activity tagged with a description and marks it as \"Productive\""
+            Then "the activity is saved successfully"
+            And "predefined coins are added to the user's wallet"
+
+        Scenario: "Deducting coins for unproductive activities"
+            Given "the activity prompt is displayed"
+            When "the user logs an activity tagged with a description and marks it as \"Unproductive\""
+            Then "the activity is saved successfully"
+            And "predefined coins are deducted from the user's wallet"
+
+    Rule: "System handles missing or delayed user input gracefully"
+
+        Scenario: "Using default values for optional fields"
+            Given "the user is active at the device"
+            When "the activity prompt appears"
+            And "the user submits the form without optional tags or description"
+            Then "the activity is saved using default activity values"
+
+        Scenario: "Handling user inactivity when the timer expires"
+            Given "the user is away from the device"
+            When "the activity prompt waiting period expires"
+            Then "the activity is automatically saved using default values"
+            And "no productivity bonus coins are awarded"

@@ -1,0 +1,83 @@
+syntax = component
+
+Component: "SQLite Primary & Replica Storage Driver"
+
+    Note: [[
+    Manages local-first SQLite persistence, transactional schema migrations, WAL mode journaling, entity storage, and change-data-capture logging for both host server and client replicas.
+    ]]
+
+    Diagram: "SQLite Storage Architecture & WAL Engine" [[
+    graph TD
+        A[Application / Domain Core Query] --> B[SQLite Storage Driver Adapter]
+        B --> C{Connection Pool (r2d2 / sqlx)}
+        C --> D[WAL Journaling Engine]
+        D --> E[Single Source of Truth Database File]
+        B --> F[Change Tracking Triggers]
+        F --> G[Local Operational Queue Table]
+    ]]
+
+    Invariants:
+        * "SQLite database connection pool must enforce Write-Ahead Logging (WAL) mode for concurrency."
+        * "Database schema migrations must be transactional and strictly idempotent."
+
+    Non-Functional:
+        * "Read query execution time for active lists must remain under 5ms."
+        * "Write transaction commit duration with WAL enabled must not exceed 10ms P95."
+
+    Models:
+        Model: "SystemVersionRecord"
+            Type: "Struct"
+            Members:
+                * "key: String (\"global_system_version\")"
+                * "value: u64"
+                * "updated_at: String (ISO 8601)"
+
+        Model: "DatabaseConfig"
+            Type: "Struct"
+            Members:
+                * "db_path: String"
+                * "max_connections: u32"
+                * "busy_timeout_ms: u64"
+                * "enable_wal: bool"
+
+    Contracts:
+        Contract: "ExecuteTransaction"
+            Signature: "pub fn execute_transaction<F, T>(&self, f: F) -> Result<T, DbError> where F: FnOnce(&mut Transaction) -> Result<T, DbError>"
+            Inputs:
+                * "f: Closure containing database operations to execute atomically"
+            Outputs:
+                * "T: Result payload returned by transaction closure"
+            Requires:
+                * "Database file exists and connection pool is active"
+            Ensures:
+                * "Operations commit completely or rollback entirely on failure"
+            Precondition:
+                * "No conflicting schema lock is held"
+            Postcondition:
+                * "Database state is persistent on disk"
+            Process:
+                1. "Acquire database connection from pool."
+                2. "Begin SQLite immediate transaction."
+                3. "Execute closure f passing transaction handle."
+                4. "If closure returns Ok, issue COMMIT command."
+                5. "If closure returns Err, issue ROLLBACK command and propagate DbError."
+
+        Contract: "IncrementGlobalVersion"
+            Signature: "pub fn increment_global_version(&self, tx: &mut Transaction) -> Result<u64, DbError>"
+            Inputs:
+                * "tx: Reference to active SQLite transaction handle"
+            Outputs:
+                * "u64: The newly incremented global_system_version value"
+            Requires:
+                * "Transaction handle is active"
+            Ensures:
+                * "global_system_version counter increases by exactly 1"
+            Precondition:
+                * "SystemVersionRecord table exists"
+            Postcondition:
+                * "New version integer is persisted and returned"
+            Process:
+                1. "Read current global_system_version from system_version_record table."
+                2. "Add 1 to the current version integer."
+                3. "UPDATE system_version_record table with new version and timestamp."
+                4. "Return new version integer."
