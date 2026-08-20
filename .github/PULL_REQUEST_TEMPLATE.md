@@ -1,5 +1,5 @@
 ### Context
-- **Type:** [ ] Defect | [ ] Feature | [ ] Improvement | [ ] Docs
+- **Type:** [ ] Defect | [ ] Infra | [ ] Feature | [ ] Improvement | [ ] Docs
  **Issue:** Fixes #<!-- Paste Issue Number here (e.g., #104) -->
 - **Link:** <!-- Paste full issue URL here -->
 
