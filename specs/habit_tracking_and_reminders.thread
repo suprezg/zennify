@@ -1,0 +1,88 @@
+syntax = behavior
+
+Feature: "Habit Tracking and Reminders"
+
+    Note: [[
+    As a User
+    I want to create habits with custom frequencies, colors, and persistent reminders
+    So that I can consistently track my daily completions on an individual heatmap calendar with financial consequences
+    ]]
+
+    Diagram: "Habit Scheduling & Completion Flow" [[
+    graph TD
+        A[Create Habit Form] --> B{Set Reminders?}
+        B -- Yes --> C[Schedule OS Notification Routine]
+        B -- No --> D[Add Habit to List]
+        C --> D
+        E[Device Boot / Wakeup] --> F{Missed Reminder Threshold Elapsed?}
+        F -- Yes 1-2 mins --> G[Display Catch-up Popup]
+        D --> H[User Checks Off Habit Today]
+        H --> I[Update Heatmap Cell Color & Credit Wallet Coins]
+        J[Calendar Day Change] --> K{Habit Completed Today?}
+        K -- No --> L[Mark Incomplete & Deduct Penalty Coins]
+    ]]
+
+    Rule: "The main interface manages empty states and displays habit logs sequentially"
+
+        Scenario: "Viewing the main screen when no habits exist"
+            Given "the user has not created any habits"
+            When "the user views the main habit screen"
+            Then "a message box stating \"No Habits Made\" is displayed"
+            And "the habit cards list is hidden"
+
+        Scenario: "Displaying existing habits in a scannable list"
+            Given "the user has created multiple habits"
+            When "the user views the main habit screen"
+            Then "the habits are displayed as a continuous list of individual cards"
+            And "each card displays its respective name, description, and an interactive tracking grid"
+
+    Rule: "Habit creation configures visual indicators and conditional reminder schedules"
+
+        Scenario: "Initiating habit creation"
+            When "the user triggers the add habit action"
+            Then "the system presents a creation form requiring a name, a description, and a grid color"
+
+        Scenario: "Creating a habit without reminders"
+            Given "the user fills out the core habit details"
+            When "the user leaves the reminder option unchecked"
+            And "submits the habit creation form"
+            Then "the new habit card is successfully added to the main screen list"
+            And "no notification routines are scheduled for this habit"
+
+        Scenario: "Creating a habit with active weekly reminders"
+            Given "the user fills out the core habit details"
+            When "the user enables the reminder option"
+            And "selects specific days of the week alongside a target reminder time"
+            And "submits the form"
+            Then "the habit card is successfully added to the main screen list"
+            And "the system schedules recurring notification popups for the designated days and times"
+
+    Rule: "Missing a scheduled reminder time due to device inactivity triggers a delayed alert"
+
+        Scenario: "Processing reminders when the device is active at the scheduled time"
+            Given "a habit has a reminder scheduled for the current day and time"
+            And "the user's device is turned on and active"
+            When "the scheduled time arrives"
+            Then "a notification popup appears to remind the user about the habit"
+
+        Scenario: "Catching up on missed reminders after system startup"
+            Given "a habit has a reminder scheduled for a specific time"
+            And "the user's device is shut down when that scheduled time passes"
+            When "the user turns on their device and the system boots up"
+            And "the user's configured delay threshold of \"1 to 2 minutes\" elapses"
+            Then "a notification popup appears summarizing the missed habit reminder"
+
+    Rule: "Checking off a habit logs progress dynamically and processes financial adjustments"
+
+        Scenario: "Mark a habit as completed for the current day rewards coins"
+            Given "a habit card is displayed on the main screen"
+            When "the user selects the check icon for that habit"
+            Then "the habit is logged as completed for today"
+            And "the interactive tracking calendar grid immediately updates the current day's block using the user's chosen habit color"
+            And "predefined reward coins are added to the user's wallet"
+
+        Scenario: "Failing to log a habit for the day deducts coins"
+            Given "a habit is scheduled to be performed on the current day"
+            When "the calendar day changes without a registered completion log"
+            Then "the habit day status shifts to incomplete"
+            And "predefined penalty coins are automatically deducted from the user's wallet"

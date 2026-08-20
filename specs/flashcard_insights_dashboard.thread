@@ -1,0 +1,59 @@
+syntax = behavior
+
+Feature: "Flashcard Insights Dashboard"
+
+    Note: [[
+    As a User
+    I want to view my estimated knowledge metrics, predictive review forecasts, streaks, multipliers, and coin allocations
+    So that I can understand my learning velocity, memory stability, upcoming workloads, and financial gains
+    ]]
+
+    Diagram: "FSRS Memory Pipeline & Insights" [[
+    graph TD
+        A[Card Grading History] --> B[FSRS Scheduling Engine]
+        B --> C[Active Knowledge Estimation]
+        B --> D[Memory Stability Curve]
+        B --> E[Ease Factor Distribution]
+        B --> F[30-Day Review Forecast]
+        B --> G[Card Status Breakdown]
+        A --> H[Wallet Earnings Audit]
+    ]]
+
+    Background: "Revision Data Context"
+        Given "the user has active flashcards with revision history data"
+        And "the user navigates to the Flashcard Analytics Dashboard view"
+
+    Rule: "Summary metrics track real-time memory strength, recall probability, and gamification status"
+
+        Scenario: "Displaying core knowledge retention metrics"
+            Then "the dashboard displays the \"Active Knowledge\" metric representing the estimated amount of information recallable at this moment"
+            And "the dashboard displays the \"Success Rate\" metric providing a real-time prediction of execution performance"
+            And "the dashboard displays the \"Retention Rate\" metric measuring the average retrievability across all learned cards"
+
+        Scenario: "Displaying revision streaks and active coin multipliers"
+            Then "the dashboard displays the user's current flashcard revision session streak"
+            And "the dashboard displays the active coin multiplier applied to earnings"
+
+    Rule: "Economy verification ensures flashcard study actions reward the user"
+
+        Scenario: "Confirming wallet credit deposits for successful revisions"
+            Then "the dashboard displays the total coins earned specifically via flashcard active recall"
+            And "the balance reflects that each completed study loop successfully credited the wallet according to economic configurations"
+
+    Rule: "Visual profiles map out collection complexity and historical progression"
+
+        Scenario: "Viewing the collection complexity profile"
+            Then "the dashboard displays an \"Ease Factor Distribution\" chart"
+            And "the chart visualizes the difficulty and complexity variance across the flashcard library"
+
+        Scenario: "Evaluating long-term memory strength"
+            Then "the dashboard displays a \"Memory Stability\" chart"
+            And "the chart represents the absolute durability of the user's long-term memory tracks"
+
+        Scenario: "Forecasting future revision workloads"
+            Then "the dashboard displays a \"30-Day Review Forecast\" chart"
+            And "the chart calculates exactly when each card in the collection will next become due over the upcoming month"
+
+        Scenario: "Visualizing card lifecycle states"
+            Then "the dashboard displays a \"Card Status Distribution\" chart"
+            And "the chart provides a breakdown of where cards currently reside within the learning process lifecycle"

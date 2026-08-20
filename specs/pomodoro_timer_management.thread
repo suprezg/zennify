@@ -1,0 +1,117 @@
+syntax = behavior
+
+Feature: "Pomodoro Timer Management"
+
+    Note: [[
+    As a User
+    I want to execute customizable focus and break sessions with absolute state persistence, daily streaks, multipliers, and per-work-session coin rewards
+    So that I can maintain structured productivity intervals across application restarts without fear of financial penalties
+    ]]
+
+    Diagram: "Pomodoro Phase Machine & State Recovery" [[
+    stateDiagram-v2
+        [*] --> WorkSessionIdle
+        WorkSessionIdle --> WorkSessionRunning: Click Start
+        WorkSessionRunning --> WorkSessionPaused: Click Pause
+        WorkSessionPaused --> WorkSessionRunning: Click Resume
+        WorkSessionRunning --> WorkSessionIdle: Click Restart
+        WorkSessionRunning --> WorkSessionCompleted: Countdown Hits 0
+        WorkSessionCompleted --> AwardCoins: Reward Wallet
+        AwardCoins --> BreakSessionIdle: Auto-Phase Transition
+        BreakSessionIdle --> BreakSessionRunning: Click Start
+        BreakSessionRunning --> BreakSessionCompleted: Countdown Hits 0
+        BreakSessionCompleted --> WorkSessionIdle: Advance Phase
+        WorkSessionRunning --> StatePersisted: Shutdown/Crash
+        StatePersisted --> WorkSessionRunning: App Restored
+    ]]
+
+    Background: "Pomodoro Setup Context"
+        Given "the Pomodoro configurations are set for work duration, short break, long break, and session counts"
+        And "the timer displays a countdown circle starting at the active phase duration"
+
+    Rule: "Timer controls dynamically adapt based on whether it is a work or break session"
+
+        Scenario: "Starting a work session transforms the main control action"
+            Given "the timer is in a \"Work\" session and has not been started"
+            When "the user clicks the start action"
+            Then "the countdown begins backwards"
+            And "the start action transforms into a pause action"
+
+        Scenario: "Pausing and resuming an active work session"
+            Given "the user has started a \"Work\" session"
+            When "the user pauses the timer"
+            Then "the countdown freezes at the current time remaining"
+            And "the control displays a resume action which restarts the countdown when clicked"
+
+        Scenario: "Restarting an active work session"
+            Given "the user is in an ongoing \"Work\" session"
+            When "the user clicks the restart action"
+            Then "the current work countdown resets completely back to its original duration"
+
+        Scenario: "Handling break session timer controls"
+            Given "the timer has transitioned to a \"Break\" session"
+            Then "only the start action is visible to the user"
+            And "the option to restart the session is unavailable"
+            When "the user starts the break session"
+            Then "the action transforms into a stop and resume control sequence"
+
+    Rule: "Auto-phase switching automatically moves the user through cycles when enabled"
+
+        Scenario: "Automatically transitioning to a break when auto-phase change is active"
+            Given "the auto-phase change configuration is enabled"
+            When "a \"Work\" session countdown reaches zero"
+            Then "the system automatically initiates the next \"Break\" session without requiring user interaction"
+
+    Rule: "Completed phases alert the user immediately"
+
+        Scenario: "Receiving alerts upon phase completion"
+            When "any active focus or break session countdown reaches zero"
+            Then "a notification popup appears indicating the phase is complete"
+            And "an audio cue plays to alert the user"
+
+    Rule: "System reset allows clearing the historical session stack to start fresh"
+
+        Scenario: "Resetting the entire cycle for a new day"
+            Given "the timer is at any position within the focus or break cycle"
+            When "the user clicks the reset action at the top of the interface"
+            Then "the entire cycle resets completely"
+            And "the system sets the timer state back to a brand new \"Work\" session"
+            But "previously completed sessions remain recorded in the history"
+
+    Rule: "Timer state survives application closures, system crashes, and shutdowns"
+
+        Scenario: "Resuming exact state after an application interruption"
+            Given "the user has an active timer running or paused at a specific duration"
+            When "the application closes or the system shuts down unexpectedly"
+            And "the user subsequently re-opens the application"
+            Then "the timer restores exactly from where it left off with the identical remaining duration and state"
+
+    Rule: "Coin allocation is restricted exclusively to successful work phases"
+
+        Scenario: "Earning coins on every successful work session completion"
+            Given "the user is running an active \"Work\" session timer"
+            When "the countdown naturally hits zero without being abandoned"
+            Then "a predefined reward of coins is successfully added to the user's wallet balance"
+
+        Scenario: "Earning zero coins during break sessions"
+            Given "the user is running an active \"Break\" session timer"
+            When "the countdown naturally hits zero"
+            Then "the system advances to the next work phase block"
+            And "the user's wallet coin balance remains unchanged"
+
+    Rule: "Streaks and multipliers maintain a strict daily tracking loop without balance reductions"
+
+        Scenario: "Advancing the streak and multiplier for the first work session of the day"
+            Given "the user has not completed any other Pomodoro work sessions yet today"
+            When "the first \"Work\" session countdown hits zero for this calendar date"
+            Then "the user's daily focus streak increments by 1"
+            And "the active coin multiplier advances for that day"
+            And "any subsequent work sessions completed on the same calendar day reward coins but do not advance the streak further"
+
+        Scenario: "Resetting streaks and multipliers on missed calendar days without cutting coins"
+            Given "a new calendar day begins"
+            And "the user failed to complete any \"Work\" session during the entire previous calendar day"
+            When "the system validates the new day's state configuration"
+            Then "the user's focus streak resets back to 0"
+            And "the active coin multiplier resets back to its baseline value"
+            But "the user's wallet coin balance is fully preserved without deductions"

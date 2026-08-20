@@ -1,0 +1,160 @@
+syntax = behavior
+
+Feature: "Shop Item Management and Purchasing"
+
+    Note: [[
+    As a User
+    I want to create custom rewards and purchase them using my earned wallet coins
+    So that I can spend my hard-earned currency on real-life incentives
+    ]]
+
+    Diagram: "Shop Storefront Purchase Flow" [[
+    graph TD
+        A[View Shop Catalog] --> B{Custom Items Exist?}
+        B -- No --> C[Display No Item Made Message]
+        B -- Yes --> D[Display Reward Item List]
+        E[User Creates Item] --> D
+        D --> F[User Initiates Purchase]
+        F --> G{Wallet Balance >= Price?}
+        G -- Yes --> H[Deduct Price & Deposit Item into Inventory]
+        G -- No --> I[Insufficient Funds / Action Blocked]
+    ]]
+
+    Rule: "The storefront handles empty states and displays available rewards"
+
+        Scenario: "Viewing the shop when no items have been created"
+            Given "the user has not created any custom shop items"
+            When "the user views the main shop screen"
+            Then "a message box stating \"No Item Made\" is displayed"
+            And "the shop listings are hidden"
+
+        Scenario: "Creating a new custom shop item"
+            When "the user triggers the add item action"
+            And "provides a name, description, designated duration, and coin price"
+            And "submits the creation form"
+            Then "the new item is successfully added to the shop catalog as an available purchase"
+
+    Rule: "Wallet balances determine purchase eligibility"
+
+        Scenario: "Successfully purchasing a shop item with sufficient funds"
+            Given "the user has a wallet balance greater than or equal to the item price"
+            When "the user purchases the item from the shop storefront"
+            Then "the item price is deducted from the user's wallet"
+            And "the item is added to the user's personal inventory"
+
+
+Feature: "Inventory Utilization and Time Management"
+
+    Note: [[
+    As a User
+    I want to activate my purchased rewards and flexibly save unused time blocks
+    So that I can manage my incentive windows in a dedicated minimal interface
+    ]]
+
+    Diagram: "Inventory Reward Tracking & Compounding" [[
+    graph TD
+        A[Personal Inventory List] --> B[Activate Reward Item]
+        B --> C[Open Dedicated Tracking Window with Countdown]
+        C --> D{User Action}
+        D -- Start/Pause --> E[Toggle Countdown Sequence]
+        D -- Click Save --> F[Freeze Countdown & Bank Remaining Time to Inventory]
+        D -- Countdown Hits 0 --> G[Flag Item Fully Consumed & Remove from Inventory]
+        H[New Purchase] + I[Existing Remnant] --> J[Compound Combined Duration Entry]
+    ]]
+
+    Rule: "Activating an inventory item opens a standalone tracking environment"
+
+        Scenario: "Initiating reward usage from the inventory"
+            Given "the user has a compounded or single item available in their inventory"
+            When "the user chooses to use the item"
+            Then "a dedicated small tracking window opens featuring a countdown circle"
+            And "the window displays the full total duration accumulated for that reward type"
+
+    Rule: "The tracking window controls allow pausing, resuming, and banking remaining time"
+
+        Scenario: "Starting and controlling the reward countdown sequence"
+            Given "the dedicated reward tracking window is open"
+            When "the user clicks the start action"
+            Then "the timer begins counting backwards"
+            And "the action control transforms into a pause and resume sequence"
+
+        Scenario: "Saving partial reward time for a future session"
+            Given "the user has been running a reward timer for a portion of its duration"
+            When "the user clicks the save action at the top of the window"
+            Then "the tracking window closes"
+            And "the countdown freezes immediately"
+            And "the precise remaining unused duration is updated and saved back into the inventory"
+
+        Scenario: "Completely exhausting a reward's duration"
+            Given "the user is running a reward timer with its final remaining time block"
+            When "the countdown sequence hits zero naturally"
+            Then "the item is flagged as fully consumed"
+            And "the item permanently vanishes from the user's inventory list"
+
+    Rule: "Inventory entries compound dynamically across both fractional remains and new purchases"
+
+        Scenario: "Compounding duplicate items and partial remnants within the inventory"
+            Given "the user has an existing item remnant of \"32 Minutes Gaming\" saved in their inventory from a previous session"
+            And "the user has sufficient coins to buy a new \"1 Hour Gaming\" item"
+            When "the user purchases the \"1 Hour Gaming\" item from the shop storefront"
+            Then "the system aggregates the new duration directly with the existing remainder"
+            And "the inventory updates to display a single combined entry of \"1 Hour 32 Minutes Gaming\""
+
+
+Feature: "Economy and Wallet Management"
+
+    Note: [[
+    As a User
+    I want to configure my transactional rewards, track my total wealth, and manage financial insolvencies
+    So that I can maintain a balanced and strict accountability ecosystem across all app activities
+    ]]
+
+    Diagram: "Economy Controls & Bankruptcy Lifecycle" [[
+    graph TD
+        A[Economy Dashboard] --> B[Display Coin Balance & Multiplier]
+        A --> C[Configure Reward & Penalty Rates]
+        C --> D{Penalty >= Reward?}
+        D -- Yes --> E[Update System Rule Values]
+        D -- No --> F[Block Config & Show Minimum Constraint Error]
+        A --> G{Wallet Balance Negative?}
+        G -- Yes --> H[Display Declare Bankruptcy Action]
+        G -- No --> I[Hide Bankruptcy Action]
+        H --> J[User Declares Bankruptcy]
+        J --> K[Reset Coin Balance to 0 & Increment Bankruptcy Count]
+    ]]
+
+    Background: "Economy Interface Context"
+        Given "the user navigates to the Economy screen"
+
+    Rule: "Users can view core financial metrics and active balances"
+
+        Scenario: "Displaying global wallet metrics"
+            Then "the dashboard displays the user's current wallet coin balance"
+            And "the dashboard displays the current active reward multiplier"
+            And "the dashboard displays the historical total count of declared bankruptcies"
+
+    Rule: "Reward and penalty configurations must enforce structural minimum boundaries"
+
+        Scenario: "Configuring valid reward and penalty structures"
+            When "the user sets the successful completion reward to \"+10\" coins"
+            And "the user sets the failure penalty to \"-10\" coins or greater"
+            Then "the system accepts the configuration and updates the transactional rules for Todos, Activity, Habits, Flashcards, and Pomodoro"
+
+        Scenario: "Preventing penalty configurations that fall below the reward baseline"
+            When "the user sets the successful completion reward to \"+10\" coins"
+            And "the user attempts to set the failure penalty to \"-5\" coins"
+            Then "the system blocks the configuration update"
+            And "an error displays stating that the deduction value cannot be less than the addition value"
+
+    Rule: "Financial insolvency allows declaring bankruptcy to restore balance at a penalty cost"
+
+        Scenario: "Hiding bankruptcy options when the wallet balance is stable"
+            Given "the user has a positive or zero wallet coin balance"
+            Then "the option to declare bankruptcy remains hidden from the interface"
+
+        Scenario: "Successfully declaring bankruptcy during negative balance states"
+            Given "the user has dropped into a negative wallet coin balance"
+            Then "the \"Declare Bankrupt\" action becomes visible on the screen"
+            When "the user triggers the declare bankrupt action"
+            Then "the user's wallet coin balance is reset back to \"0\""
+            And "the global bankruptcy count is incremented by 1"

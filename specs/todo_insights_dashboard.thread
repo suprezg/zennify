@@ -1,0 +1,59 @@
+syntax = behavior
+
+Feature: "Todo Insights Dashboard"
+
+    Note: [[
+    As a User
+    I want to review visual charts, efficiency metrics, and historical trends for my tasks
+    So that I can evaluate my proactiveness, consistency, and overall execution habits
+    ]]
+
+    Diagram: "Todo Insights Calculation Pipeline" [[
+    graph TD
+        A[Historical Task Executions] --> B[Metrics & Scoring Engine]
+        B --> C[Completion Streak & Multiplier]
+        B --> D[Daily Heatmap Grid]
+        B --> E[Completion Score Chart]
+        B --> F[Focus Velocity Score Chart]
+        B --> G[30-Day Consistency Trend Chart]
+        B --> H[Lead Time vs Urgency Chart]
+    ]]
+
+    Background: "Task History Context"
+        Given "the user has historical data for completed, rescheduled, and failed todo tasks"
+        And "the user navigates to the Todo Insights Dashboard view"
+
+    Rule: "Gamification metrics summarize accountability momentum"
+
+        Scenario: "Displaying core gamification metrics"
+            Then "the dashboard displays the user's task completion streak"
+            And "the dashboard displays the active task coin multiplier"
+
+    Rule: "Interactive calendar heatmap shows daily productivity volume"
+
+        Scenario: "Interacting with the daily task completion heatmap"
+            Then "the dashboard displays a daily activity heatmap grid"
+            When "the user clicks on a specific day's grid block"
+            Then "a dialog box opens showing the exact number of tasks completed on that specific day"
+
+    Rule: "Analytical performance metrics are paired with personalized behavioral insights"
+
+        Scenario: "Viewing the Task Completion Score"
+            Then "the dashboard displays a \"Completion Score\" chart showing the percentage of finished tasks"
+            And "a breakdown sentence explaining the score calculation is displayed"
+            And "a personalized insight analyzing the user's completion rate is generated"
+
+        Scenario: "Viewing the Focus Score"
+            Then "the dashboard displays a \"Focus Score\" chart based on how quickly tasks are finished ahead of deadlines"
+            And "a breakdown sentence explaining the velocity metrics is displayed"
+            And "a personalized insight evaluating the user's time buffer management is generated"
+
+        Scenario: "Viewing the Consistency Trend"
+            Then "the dashboard displays a \"Consistency Trend\" chart tracking task completion volume over the last 30 days"
+            And "a breakdown sentence explaining the volume trends is displayed"
+            And "a personalized insight identifying consistency patterns or drops is generated"
+
+        Scenario: "Viewing Proactiveness via Lead Time vs Urgency"
+            Then "the dashboard displays a \"Lead Time vs Urgency\" chart analyzing task creation buffers against deadlines"
+            And "a breakdown sentence explaining the proactiveness index is displayed"
+            And "a personalized insight evaluating whether the user works reactively or proactively is generated"

@@ -1,0 +1,40 @@
+syntax = behavior
+
+Feature: "Multi-Platform Data Synchronization"
+
+    Note: [[
+    As a User
+    I want to synchronize my application data manually across all my connected devices
+    So that I have a consistent, up-to-date experience whether I am on mobile, desktop, or an embedded device
+    ]]
+
+    Diagram: "Distributed Sync Sequence" [[
+    sequenceDiagram
+        autonumber
+        actor User
+        participant Client as Local Client (SQLite + OpLog)
+        participant Axum as Desktop Host Server (Axum)
+        participant BFF as Backend-For-Frontend Adapter
+        participant HostDB as Host Single Source of Truth
+
+        User->>Client: Trigger Manual Sync
+        Client->>Axum: POST /api/sync (OpLogs + HLC Timestamp)
+        Axum->>HostDB: Resolve LWW Element-Graph
+        HostDB-->>Axum: State Convergence Updated
+        Axum->>BFF: Extract State Differential (Global System Version)
+        alt Mobile / Desktop Client
+            BFF-->>Client: Full Structural Payload
+        else Embedded Slint Client
+            BFF-->>Client: Slim Minimal Execution Payload
+        end
+        Client->>Client: Re-index Local Replica & Reset Checkpoint
+        Client-->>User: Visual Sync Confirmation
+    ]]
+
+    Rule: "Manual synchronization updates data consistency across all device form factors"
+
+        Scenario: "Successfully synchronizing data across the ecosystem"
+            Given "the user is on any supported platform variant among \"Mobile\", \"Desktop\", or \"Embedded Device\""
+            When "the user triggers the manual synchronization action"
+            Then "the system updates all tracking metrics, todos, habits, flashcards, pomodoro history, and shop inventory to the latest state"
+            And "a visual confirmation message displays indicating that all devices are fully synchronized"
