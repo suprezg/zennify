@@ -1,0 +1,25 @@
+[package]
+name = "zennifyserver"
+version = "0.1.0"
+edition = "2021"
+description = "Zennify Core Host Server"
+
+[lib]
+name = "zennifyserver"
+path = "lib.rs"
+
+[[bin]]
+name = "zennify"
+path = "main.rs"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+clap = { version = "4.4", features = ["derive"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
