@@ -3,24 +3,24 @@ syntax = component
 Component: "Axum Host Server & Endpoint Adapters"
 
     Note: [[
-    Provides HTTP REST and WebSocket interface ports for client interaction, state synchronization, health monitoring, and form-factor specific Backend-For-Frontend (BFF) payload transformation.
+    Provides HTTP REST interface ports for client interaction, state synchronization, health monitoring, and form-factor specific 
+    Backend-For-Frontend (BFF) payload transformation in JSON format without authentication.
     ]]
 
     Diagram: "Axum Server Endpoint Routing & BFF Wrapper" [[
     graph TD
-        A[Client HTTP/WS Request] --> B[Axum Router & Auth Middleware]
+        A[Client HTTP/WS Request] --> B[Axum Router]
         B --> C{Endpoint Route}
         C -- POST /api/v1/sync --> D[Sync Endpoint Adapter]
         C -- GET /api/v1/health --> E[Health Monitoring Adapter]
-        C -- WS /ws/stream --> F[WebSocket Push Adapter]
         D --> G[Domain Hexagonal Port]
         G --> H[BFF Form-Factor Transformer]
-        H -- Mobile/Desktop --> I[Compile Full Structural Payload]
-        H -- Slint Embedded --> J[Compile Slim Execution Payload]
+        H -- Mobile/Desktop --> I[Compile Full Structural JSON Payload]
+        H -- Slint Embedded --> J[Compile Slim Execution JSON Payload]
     ]]
 
     Invariants:
-        * "All incoming REST and WebSocket sync connections must pass authentication verification."
+        * "All client and server communication must take place in JSON format."
         * "Endpoint responses must enforce form-factor payload customization via the BFF adapter layer."
 
     Non-Functional:
@@ -28,41 +28,68 @@ Component: "Axum Host Server & Endpoint Adapters"
         * "The server must support concurrent sync handling across desktop, mobile, and embedded devices without thread starvation."
 
     Models:
-        Model: "HttpRequestEnvelope"
+        Model: "RequestEnvelope"
             Type: "Struct"
             Members:
-                * "client_id: String (UUID)"
-                * "device_type: Enum (Desktop, Mobile, EmbeddedSlint)"
-                * "auth_token: String"
-                * "payload: Vector of Bytes / JSON"
+                * "clientId: String (UUID)"
+                * "deviceType: Enum (Desktop, Mobile, EmbeddedSlint)"
+                * "payload: JSON Value"
 
-        Model: "HttpResponseEnvelope"
+        Model: "ResponseEnvelope"
             Type: "Struct"
             Members:
-                * "status_code: u16"
-                * "server_version: u64"
-                * "payload: Binary / Compressed JSON"
+                * "statusCode: u16"
+                * "serverVersion: u64"
+                * "payload: JSON Value"
+
+        Model: "ServerError"
+            Type: "Enum"
+            Members:
+                * "UpstreamFlushError: NotAdheredToStructure (when payload structure does not match expected JSON shape) or ValueError (line number and detail string when required values are missing, invalid, or malformed)"
+                * "PayloadGenerationError: Server-side failure during response payload construction with error message string detailing the root cause"
+                * "HealthCheckError: Server-side failure during health check execution or database timestamp query returning JSON error message string"
 
     Contracts:
-        Contract: "HandleSyncEndpoint"
-            Signature: "pub async fn handle_sync(req: HttpRequestEnvelope) -> Result<HttpResponseEnvelope, ServerError>"
+        Contract: "HandleSync"
+            Signature: "pub async fn handleSync(req: RequestEnvelope) -> Result<ResponseEnvelope, ServerError>"
             Inputs:
-                * "req: Inbound HTTP Request Envelope containing client logs and device metadata"
+                * "req: Inbound HTTP Request Envelope containing client logs and device metadata in JSON format"
             Outputs:
-                * "HttpResponseEnvelope: Tailored response payload with new system version"
+                * "ResponseEnvelope: Tailored JSON response payload with updated server version"
             Requires:
-                * "Client authorization header is valid and active"
+                * "Incoming HTTP body is valid JSON matching RequestEnvelope structure"
             Ensures:
                 * "Client payload is forwarded to the Sync Flush Engine"
-                * "BFF adapter transforms domain state diff into target device form factor format"
+                * "BFF adapter transforms domain state diff into target device form factor JSON format"
             Precondition:
                 * "Network socket connection is open and responsive"
             Postcondition:
-                * "Server returns updated global system version and state differential payload"
+                * "Server returns updated global system version and state differential JSON payload or ServerError"
             Process:
-                1. "Extract authentication token and device metadata from request header."
-                2. "Validate client token against security credentials."
-                3. "Parse incoming transaction logs from request body."
-                4. "Dispatch transaction logs to the Core Domain Hexagonal Port."
-                5. "Invoke BFF Adapter to filter output payload based on device_type."
-                6. "Serialize BFF response and return HTTP 200 OK with server version."
+                1. "Parse incoming JSON request body into RequestEnvelope struct."
+                2. "Validate payload structure and fields; return ServerError::UpstreamFlushError if structure is invalid or values are missing."
+                3. "Dispatch transaction logs to Core Domain Hexagonal Port and Sync Flush Engine."
+                4. "Invoke BFF Adapter to filter output payload based on deviceType."
+                5. "Construct response payload; return ServerError::PayloadGenerationError if payload generation fails on server."
+                6. "Serialize response into JSON and return HTTP 200 OK with ResponseEnvelope."
+
+        Contract: "HandleHealth"
+            Signature: "pub async fn handleHealth() -> Result<ResponseEnvelope, ServerError>"
+            Inputs:
+                * "None"
+            Outputs:
+                * "ResponseEnvelope: Server health status and metrics payload in JSON format"
+            Requires:
+                * "HTTP GET request to /api/v1/health endpoint"
+            Ensures:
+                * "Retrieves last database write timestamp from upstream flush and server operational metrics"
+            Precondition:
+                * "Server instance is running and database connection is available"
+            Postcondition:
+                * "Returns HTTP 200 OK with ResponseEnvelope containing JSON health metrics or ServerError::HealthCheckError"
+            Process:
+                1. "Query primary database for the last date/time of write operations resulting from upstream flush."
+                2. "Collect server health metrics including system status, uptime, and database connection state."
+                3. "Construct JSON health response payload containing last write timestamp and server metrics."
+                4. "If database query or health metric compilation fails, return ServerError::HealthCheckError."
+                5. "Return HTTP 200 OK with ResponseEnvelope."
