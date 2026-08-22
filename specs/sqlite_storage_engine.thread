@@ -3,22 +3,33 @@ syntax = component
 Component: "SQLite Primary & Replica Storage Driver"
 
     Note: [[
-    Manages local-first SQLite persistence, transactional schema migrations, WAL mode journaling, entity storage, and change-data-capture logging for both host server and client replicas.
+    Manages local-first SQLite persistence, transactional schema migrations, WAL mode journaling, entity storage tables, client registration, server settings storage, and 10-minute rolling window WAL checkpointing.
     ]]
 
-    Diagram: "SQLite Storage Architecture & WAL Engine" [[
+    Diagram: "SQLite Storage Architecture & Master DDL Layout" [[
     graph TD
         A[Application / Domain Core Query] --> B[SQLite Storage Driver Adapter]
-        B --> C{Connection Pool (r2d2 / sqlx)}
+        B --> C{Connection Pool}
         C --> D[WAL Journaling Engine]
-        D --> E[Single Source of Truth Database File]
-        B --> F[Change Tracking Triggers]
-        F --> G[Local Operational Queue Table]
+        D --> E[Master Relational Tables]
+        E --> F[activity Table]
+        E --> G[flashcard Table]
+        E --> H[todo Table]
+        E --> I[pomodoro Table]
+        E --> J[habit Table]
+        E --> K[shop & inventory Tables]
+        E --> L[wallet Table]
+        E --> M[settings Table]
+        E --> N[registered_clients Table]
+        B --> O[CheckHealth Service]
+        O --> P[Retrieve Global Version & WAL Checkpoint Status]
     ]]
 
     Invariants:
         * "SQLite database connection pool must enforce Write-Ahead Logging (WAL) mode for concurrency."
         * "Database schema migrations must be transactional and strictly idempotent."
+        * "All relational tables must enforce primary key constraints and default settings initialization."
+        * "WAL checkpointing to the main database file occurs only when all registered clients sync within a 10-minute time window."
 
     Non-Functional:
         * "Read query execution time for active lists must remain under 5ms."
@@ -28,21 +39,128 @@ Component: "SQLite Primary & Replica Storage Driver"
         Model: "SystemVersionRecord"
             Type: "Struct"
             Members:
-                * "key: String (\"global_system_version\")"
+                * "key: String (\"globalSystemVersion\")"
                 * "value: u64"
-                * "updated_at: String (ISO 8601)"
+                * "updatedAt: String (ISO 8601)"
 
         Model: "DatabaseConfig"
             Type: "Struct"
             Members:
-                * "db_path: String"
-                * "max_connections: u32"
-                * "busy_timeout_ms: u64"
-                * "enable_wal: bool"
+                * "dbPath: String"
+                * "maxConnections: u32"
+                * "busyTimeoutMs: u64"
+                * "enableWal: bool"
+
+        Model: "HealthCheckResult"
+            Type: "Struct"
+            Members:
+                * "globalSystemVersion: u64"
+                * "lastDbWriteTimestamp: String (ISO 8601 timestamp of last write from upstream flush)"
+                * "registeredClientCount: usize"
+                * "walCheckpointStatus: String (\"Pending\" or \"CheckpointCompleted\")"
+                * "totalRecords: u64"
+                * "isHealthy: bool"
+                * "metrics: JSON Value"
+
+        Model: "ActivityRecord"
+            Type: "Struct"
+            Members:
+                * "sessionId: i64 (PRIMARY KEY AUTOINCREMENT)"
+                * "date: String"
+                * "startTime: String"
+                * "endTime: String"
+                * "description: String"
+                * "tag: String"
+                * "isProductive: bool"
+                * "retribution: f64"
+
+        Model: "FlashcardRecord"
+            Type: "Struct"
+            Members:
+                * "cardId: String (PRIMARY KEY)"
+                * "contentHash: String"
+                * "deckName: String"
+                * "stability: f64"
+                * "difficulty: f64"
+                * "state: i32"
+                * "nextReview: String"
+                * "lastReview: String"
+                * "retribution: f64"
+
+        Model: "TodoRecord"
+            Type: "Struct"
+            Members:
+                * "taskId: i64 (PRIMARY KEY AUTOINCREMENT)"
+                * "taskName: String"
+                * "creationDate: String"
+                * "deadline: String"
+                * "status: String"
+                * "completionTime: String"
+                * "retribution: f64"
+
+        Model: "PomodoroRecord"
+            Type: "Struct"
+            Members:
+                * "sessionId: i64 (PRIMARY KEY AUTOINCREMENT)"
+                * "date: String"
+                * "startTime: String"
+                * "endTime: String"
+                * "durationMins: i32"
+                * "phase: String"
+                * "retribution: f64"
+
+        Model: "HabitRecord"
+            Type: "Struct"
+            Members:
+                * "habitId: i64 (PRIMARY KEY AUTOINCREMENT)"
+                * "habitName: String"
+                * "frequency: String"
+                * "targetCount: i32"
+                * "currentCount: i32"
+                * "lastCompletedDate: String"
+                * "retribution: f64"
+                * "createdAt: String"
+
+        Model: "ShopItemRecord"
+            Type: "Struct"
+            Members:
+                * "itemId: i64 (PRIMARY KEY AUTOINCREMENT)"
+                * "itemName: String"
+                * "cost: i32"
+                * "purchaseCount: i32"
+
+        Model: "InventoryItemRecord"
+            Type: "Struct"
+            Members:
+                * "itemId: i64 (PRIMARY KEY)"
+                * "itemName: String"
+                * "durationMins: i32"
+                * "acquiredDate: String"
+
+        Model: "WalletRecord"
+            Type: "Struct"
+            Members:
+                * "id: i32 (PRIMARY KEY CHECK id = 1)"
+                * "totalCoins: f64"
+                * "bankruptcyCount: i32"
+
+        Model: "SettingsRecord"
+            Type: "Struct"
+            Members:
+                * "settingKey: String (PRIMARY KEY)"
+                * "settingValue: String"
+                * "updatedAt: String"
+
+        Model: "RegisteredClientRecord"
+            Type: "Struct"
+            Members:
+                * "clientId: String (PRIMARY KEY)"
+                * "deviceType: String"
+                * "lastSeenAt: String"
 
     Contracts:
         Contract: "ExecuteTransaction"
-            Signature: "pub fn execute_transaction<F, T>(&self, f: F) -> Result<T, DbError> where F: FnOnce(&mut Transaction) -> Result<T, DbError>"
+            Signature: "pub fn executeTransaction<F, T>(&self, f: F) -> Result<T, DbError> where F: FnOnce(&mut Transaction) -> Result<T, DbError>"
             Inputs:
                 * "f: Closure containing database operations to execute atomically"
             Outputs:
@@ -63,21 +181,62 @@ Component: "SQLite Primary & Replica Storage Driver"
                 5. "If closure returns Err, issue ROLLBACK command and propagate DbError."
 
         Contract: "IncrementGlobalVersion"
-            Signature: "pub fn increment_global_version(&self, tx: &mut Transaction) -> Result<u64, DbError>"
+            Signature: "pub fn incrementGlobalVersion(&self, tx: &mut Transaction) -> Result<u64, DbError>"
             Inputs:
                 * "tx: Reference to active SQLite transaction handle"
             Outputs:
-                * "u64: The newly incremented global_system_version value"
+                * "u64: The newly incremented globalSystemVersion value"
             Requires:
                 * "Transaction handle is active"
             Ensures:
-                * "global_system_version counter increases by exactly 1"
+                * "globalSystemVersion counter increases by exactly 1"
             Precondition:
                 * "SystemVersionRecord table exists"
             Postcondition:
                 * "New version integer is persisted and returned"
             Process:
-                1. "Read current global_system_version from system_version_record table."
+                1. "Read current globalSystemVersion from system_version_record table."
                 2. "Add 1 to the current version integer."
                 3. "UPDATE system_version_record table with new version and timestamp."
                 4. "Return new version integer."
+
+        Contract: "CheckHealth"
+            Signature: "pub fn checkHealth(&self) -> Result<HealthCheckResult, DbError>"
+            Inputs:
+                * "None"
+            Outputs:
+                * "HealthCheckResult: Database health status including globalSystemVersion, lastDbWriteTimestamp, registered client count, and total record metrics"
+            Requires:
+                * "Database connection pool is active"
+            Ensures:
+                * "Retrieves globalSystemVersion, registered client count, and the last write timestamp from upstream flush operations"
+            Precondition:
+                * "SQLite database is online"
+            Postcondition:
+                * "Returns HealthCheckResult object or DbError on database failure"
+            Process:
+                1. "Query system_version_record table for globalSystemVersion and last updated timestamp."
+                2. "Query registered_clients table for total registered client count and last seen timestamps."
+                3. "Count total rows across activity, flashcard, todo, pomodoro, habit, shop, inventory, and wallet tables."
+                4. "Verify WAL checkpoint status."
+                5. "Construct and return HealthCheckResult struct containing version, lastDbWriteTimestamp, registeredClientCount, and metrics."
+
+        Contract: "TriggerWalCheckpoint"
+            Signature: "pub fn triggerWalCheckpoint(&self) -> Result<bool, DbError>"
+            Inputs:
+                * "None"
+            Outputs:
+                * "bool: Returns true if all registered clients synced within 10-minute window and WAL checkpoint succeeded"
+            Requires:
+                * "Registered clients exist in database"
+            Ensures:
+                * "Flushes WAL log frames into primary SQLite master database file when 10-minute multi-client sync condition is met"
+            Precondition:
+                * "Database connection is open"
+            Postcondition:
+                * "Primary SQLite database file is synchronized with WAL journal"
+            Process:
+                1. "Check sync timestamps for all clients in registered_clients table."
+                2. "Verify if max(lastSeenAt) - min(lastSeenAt) <= 10 minutes across all registered clients."
+                3. "If condition is met, issue PRAGMA wal_checkpoint(FULL) command."
+                4. "Return true on successful WAL checkpoint execution."

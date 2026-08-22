@@ -3,78 +3,162 @@ syntax = component
 Component: "State Convergence & Sync Flush Engine"
 
     Note: [[
-    Coordinates state-based operational log convergence, Last-Write-Wins (LWW) element graph resolution, Hybrid Logical Clock (HLC) tick propagation, and global system version cache invalidation.
+    Coordinates state-based operational log convergence, specialized Activity interval-overlap conflict resolution, Last-Write-Wins (LWW) element resolution for standard entities, form-factor capability rules, server settings propagation, and 10-minute multi-client WAL checkpointing.
     ]]
 
-    Diagram: "Sync Flush & LWW Convergence Engine" [[
+    Diagram: "Sync Flush & Activity Interval Overlap Convergence Engine" [[
     graph TD
-        A[Inbound Client OpLogs & HLC] --> B[Hybrid Logical Clock Synchronization]
-        B --> C[Validate Vector Timestamp vs Client Last Known Version]
-        C --> D{Version Match?}
-        D -- Match --> E[Serve Cached Differential Payload]
-        D -- Mismatch --> F[Execute LWW Conflict Resolution]
-        F --> G[Commit Converged State to Primary Database]
-        G --> H[Increment Global System Version]
-        H --> I[Bust Server Cache & Build Fresh Differential Payload]
-        I --> J[Return Payload & Updated Vector Checkpoint]
+        A[Inbound Client RequestEnvelope & JSON Payload] --> B[Hybrid Logical Clock Synchronization]
+        B --> C[Validate Client Registration & Update Sync Timestamp]
+        C --> D{Contains Activity Logs?}
+        D -- Yes --> E[Sort Activity Logs AM to PM]
+        E --> F{Contains Interval Setting Change?}
+        F -- Yes --> G[Apply Lowest-Interval-Wins to Overlapping Time Windows & Retain Non-Overlapping Logs]
+        F -- No --> H[Apply Chronological First-Start-Time Wins & Disregard Overlapping Middle Entries]
+        D -- No --> I[Apply Standard LWW Conflict Resolution]
+        G --> J[Persist Converged State & Settings to SQLite WAL]
+        H --> J
+        I --> J
+        J --> K[Check 10-Minute Rolling Window Across All Registered Clients]
+        K -- All Synced in 10 Mins --> L[Trigger WAL Checkpoint to Main Database File]
+        K -- Waiting for Other Clients --> M[Keep Changes Staged in WAL Journal]
+        L --> N[Increment Global System Version & Build Outgoing JSON Payloads]
+        M --> N
     ]]
 
     Invariants:
         * "Global System Version must monotonically increment on every valid write flush."
-        * "Operational log entries must be applied strictly in Last-Write-Wins order evaluated by HLC timestamps."
+        * "Non-overlapping activity log entries from multiple offline clients are both committed chronologically."
+        * "Overlapping activity log entries with identical interval settings are resolved by chronological start time where the earlier start time wins and middle-overlapping entries are rejected."
+        * "When an activity interval setting change payload is present, overlapping time windows are resolved by Lowest-Interval-Wins while non-overlapping time windows from longer intervals are retained."
+        * "All payload data sent or received by the engine must be formatted exclusively as JSON."
+        * "Embedded Slint devices are strictly constrained to append-only activity logging, check-only todo completion, pomodoro session logging with retribution, flashcard loop revisions with retribution, and check-only daily habit completion."
+        * "Primary SQLite database WAL journaling is checkpointed to the main disk file only when all registered clients sync within a 10-minute time window."
 
     Non-Functional:
         * "Conflict resolution for 1,000 pending operational transactions must execute within 20ms."
         * "Memory footprint of in-flight execution queues must remain bounded under 32MB."
 
     Models:
-        Model: "OpLogEntry"
-            Type: "Struct"
+        Model: "EntityType"
+            Type: "Enum"
             Members:
-                * "id: String (UUID v4)"
-                * "hlc_timestamp: HybridLogicalClock"
-                * "entity_type: String (Task, Habit, Flashcard, Economy)"
-                * "mutation_type: Enum (Create, Update, Delete)"
-                * "payload: String (JSON / Binary)"
+                * "Activity"
+                * "Todo"
+                * "Habit"
+                * "Flashcard"
+                * "Pomodoro"
+                * "Shop"
+                * "Inventory"
+                * "Wallet"
+                * "Settings"
+
+        Model: "MutationType"
+            Type: "Enum"
+            Members:
+                * "Create"
+                * "Update"
+                * "Delete"
 
         Model: "HybridLogicalClock"
             Type: "Struct"
             Members:
-                * "physical_time: u64"
-                * "logical_counter: u32"
-                * "node_id: String"
+                * "physicalTime: u64"
+                * "logicalCounter: u32"
+                * "nodeId: String"
+
+        Model: "OpLogEntry"
+            Type: "Struct"
+            Members:
+                * "id: String (UUID v4)"
+                * "hlcTimestamp: HybridLogicalClock"
+                * "entityType: EntityType"
+                * "mutationType: MutationType"
+                * "payload: JSON Value"
+
+        Model: "IncomingDesktopMobilePayload"
+            Type: "Struct"
+            Members:
+                * "activityEntries: Vector of OpLogEntry (Create activity session logs with start/end time and retribution)"
+                * "todoOperations: Vector of OpLogEntry (Create new todo, Check todo completion, Reschedule deadline, Set max active todo limit)"
+                * "pomodoroSessions: Vector of OpLogEntry (Create work and break session logs with retribution)"
+                * "flashcardRevisions: Vector of OpLogEntry (Full loop revision or partial card revisions with retribution)"
+                * "habitOperations: Vector of OpLogEntry (Create habit, Check daily habit completion with retribution)"
+                * "inventoryOperations: Vector of OpLogEntry (Unlock item, Manage acquired inventory items)"
+                * "shopWalletOperations: Vector of OpLogEntry (Create item, Purchase reward item, Wallet spend)"
+                * "settingsPayload: JSON Value (Update activity_interval_mins or max_active_todos)"
+
+        Model: "IncomingEmbeddedSlintPayload"
+            Type: "Struct"
+            Members:
+                * "activityEntries: Vector of OpLogEntry (Create activity session logs with start/end time and retribution)"
+                * "todoCheckOnly: Vector of OpLogEntry (Check todo completion only)"
+                * "pomodoroSessions: Vector of OpLogEntry (Create work and break session logs with retribution)"
+                * "flashcardRevisions: Vector of OpLogEntry (Full loop revision or partial card revisions with retribution)"
+                * "habitCheckOnly: Vector of OpLogEntry (Check daily habit completion only)"
+
+        Model: "OutgoingDesktopMobilePayload"
+            Type: "Struct"
+            Members:
+                * "newGlobalVersion: u64"
+                * "structuralDiff: JSON Value (Full relational state differential for desktop and mobile clients)"
+                * "activeSettings: JSON Value (Current server settings including activity_interval_mins and max_active_todos)"
+
+        Model: "OutgoingEmbeddedSlintPayload"
+            Type: "Struct"
+            Members:
+                * "newGlobalVersion: u64"
+                * "executionVariables: JSON Value (Slimmed down operational state variables for Slint embedded clients)"
+                * "activeSettings: JSON Value (Current server settings including activity_interval_mins)"
+
+        Model: "CheckpointWindowState"
+            Type: "Struct"
+            Members:
+                * "registeredClients: Vector of String"
+                * "syncTimestamps: JSON Value"
+                * "isCheckpointWindowMet: bool"
 
         Model: "SyncStateResult"
             Type: "Struct"
             Members:
-                * "new_global_version: u64"
-                * "applied_count: usize"
-                * "rejected_count: usize"
-                * "diff_payload: Vector of u8"
+                * "newGlobalVersion: u64"
+                * "appliedCount: usize"
+                * "rejectedCount: usize"
+                * "isWalCheckpointed: bool"
+                * "diffPayload: JSON Value"
 
     Contracts:
         Contract: "ReconcileOpLogs"
-            Signature: "pub fn reconcile_op_logs(client_logs: Vec<OpLogEntry>, client_version: u64) -> Result<SyncStateResult, SyncError>"
+            Signature: "pub fn reconcileOpLogs(clientLogs: Vec<OpLogEntry>, clientVersion: u64) -> Result<SyncStateResult, SyncError>"
             Inputs:
-                * "client_logs: Batch of un-synced operational transaction log entries from client"
-                * "client_version: Monotonic version integer sent by client"
+                * "clientLogs: Batch of un-synced operational transaction log entries in JSON format"
+                * "clientVersion: Monotonic version integer sent by client"
             Outputs:
-                * "SyncStateResult: Resolution summary with incremented version and differential payload"
+                * "SyncStateResult: Resolution summary with incremented version, WAL checkpoint status, and differential JSON payload"
             Requires:
                 * "Client log batch is sorted by HLC timestamp ascending"
+                * "Form-factor operational constraints are enforced for incoming payload actions"
             Ensures:
-                * "Non-conflicting structural operations are persisted into host SQLite"
-                * "global_system_version increments if any mutation is committed"
+                * "Non-overlapping activity logs from offline clients are both committed"
+                * "Overlapping activity logs with identical intervals are resolved by earlier start time"
+                * "Overlapping activity logs with interval setting changes are resolved by Lowest-Interval-Wins while preserving non-overlapping higher-interval logs"
+                * "WAL checkpointing is triggered when all registered clients sync within a 10-minute window"
             Precondition:
                 * "Database lock is acquired for transaction stream"
             Postcondition:
-                * "All applied log signatures are flagged as synchronized"
+                * "All applied log signatures are flagged as synchronized and active settings broadcasted to clients"
             Process:
-                1. "Advance local HLC clock to max(local_hlc, client_hlc)."
-                2. "Check if client_version matches host global_system_version."
-                3. "If versions match and cache is warm, return cached diff immediately."
-                4. "Iterate through client_logs and compare HLC signatures against host entity table."
-                5. "Apply LWW rule: if client log HLC > host entity HLC, update host state."
-                6. "Increment host global_system_version counter."
-                7. "Invalidate server response cache."
-                8. "Return SyncStateResult with updated version and payload."
+                1. "Advance local HLC clock to max(local_hlc, client_hlc) and update registered_clients table lastSeenAt timestamp."
+                2. "Check if clientVersion matches host globalSystemVersion."
+                3. "If versions match and cache is warm, return cached diff JSON immediately."
+                4. "Validate form-factor payload action permissions (e.g. verify embedded client todo and habit operations are check-only)."
+                5. "If settings update is present (e.g. activity_interval_mins changed from 60 to 120 mins), persist new setting to settings table."
+                6. "Process activity logs: sort candidate entries from AM to PM."
+                7. "If setting change is present: resolve overlapping time windows using Lowest-Interval-Wins rule; retain non-overlapping logs from higher intervals."
+                8. "If setting change is not present: resolve overlapping time windows by selecting the log with the earliest start time and discarding middle-overlapping logs."
+                9. "Apply standard LWW rule for non-activity entities (todo, habit, flashcard, pomodoro, shop, inventory, wallet)."
+                10. "Persist resolved mutations to SQLite WAL journal."
+                11. "Evaluate 10-minute rolling sync window across all registered clients in registered_clients table."
+                12. "If max(lastSeenAt) - min(lastSeenAt) <= 10 minutes across all registered clients, execute PRAGMA wal_checkpoint(FULL)."
+                13. "Increment host globalSystemVersion counter."
+                14. "Return SyncStateResult with updated version, WAL checkpoint flag, active settings, and form-factor tailored JSON diff payload."
