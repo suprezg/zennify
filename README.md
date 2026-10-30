@@ -6,65 +6,96 @@
     <br />
     <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
     <br />
-    <img src="https://img.shields.io/badge/Axum-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Axum">
-    <img src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" alt="Next.js">
+    <img src="https://img.shields.io/badge/Gin-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Gin">
+    <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust">
+    <img src="https://img.shields.io/badge/Svelte-FF3E00?style=for-the-badge&logo=svelte&logoColor=white" alt="Svelte">
+    <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React">
     <img src="https://img.shields.io/badge/Tauri-24C8D8?style=for-the-badge&logo=tauri&logoColor=white" alt="Tauri">
-    <img src="https://img.shields.io/badge/Kotlin_Multiplatform-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin Multiplatform">
+    <img src="https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin">
     <img src="https://img.shields.io/badge/Slint-232B2B?style=for-the-badge&logo=rust&logoColor=white" alt="Slint UI">
     <br />
+    <img src="https://img.shields.io/badge/Web-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Web">
     <img src="https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
     <img src="https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux">
     <img src="https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android">
     <img src="https://img.shields.io/badge/Embedded-Devices-4B0082?style=for-the-badge" alt="Embedded Devices">
     <br />
     <br />
-    <i>A hardcore, gamified productivity suite for deep work</i>
+    <i>A hardcore, discipline-driven productivity suite built on daily Planning, Execution, and Reflection.</i>
 </p>
 
 ## Abstract
 
-Zennify is a cross-platform, local-first gamified productivity ecosystem designed for deep work and personal accountability. It integrates interval activity tracking, spaced-repetition flashcards, Pomodoro focus timers, customizable habit tracking, and a real-life reward shop tied together by a unified virtual economy. Built using a Distributed Hybrid Topology, Zennify operates with a central host server on desktop while client applications on desktop, mobile, and embedded hardware maintain local database replicas to guarantee zero latency and complete data privacy without cloud dependence.
+Zennify is not casual gamification. It is built upon the philosophical approach that work and time management can be accomplished through daily Planning, Execution, and Reflection, cultivating a disciplined and genuinely productive environment. The only purpose of incorporating an economic currency mechanism is to instill real discipline by establishing that relaxation, leisure, and pleasure must be earned through hard, focused labor.
+
+```
++-------------------------------------------------------+
+|                   THE ZENNIFY TRIAD                   |
+|                                                       |
+|   [ PLANNING ]  -->  [ EXECUTION ]  --> [ REFLECTION ] |
+|   Goal-Oriented       Pomodoro Focus      Activity &  |
+|  Task Management          Timer         Habit Tracking|
++-------------------------------------------------------+
+                            |
+                   [ THE DISCIPLINE CORE ]
+             Earning Leisure Through Hard Labor
+        Real-Life Reward Shop & Hardcore Bankruptcy
+```
+
+To eliminate distraction and superficial productivity, the entire ecosystem is engineered to be hardcore. The system enforces strict concurrent goal limits so users only create goals they can actively focus on and execute, preventing the common trap of endlessly planning tasks with zero execution. Every task carries an unyielding deadline where missing any single task triggers an immediate fail-all cascade across the entire goal, deducting severe wallet penalties. Active goals and tasks cannot be deleted or evaded once committed. There are no artificial streaks or coin multipliers; accountability is measured honestly at face value. Persistent negative debt hits a hard floor at -250 coins, enforcing automatic bankruptcy, asset liquidation, and complete inventory forfeiture.
+
+Every target client—Web built with Svelte, Desktop built with React and Tauri, Mobile built natively with Kotlin for Android, and Embedded built with Slint and Rust—runs completely standalone with its own local dual-layer persistence combining a materialized relational database with an append-only event log. An optional self-hosted synchronization daemon written in Go using Gin pairs with an internal Rust rusqlite sidecar process over standard input/output pipes, enabling Git-like event synchronization across devices with zero reliance on cloud services.
 
 ## Objective
 
-To provide a privacy-first, low-overhead productivity environment that uses gamification, strict accountability rules, and clear performance analytics to eliminate procrastination and cultivate long-term focus habits across all user devices.
+To provide an autonomous, privacy-first, zero-latency productivity environment that replaces soft task management with unyielding commitment, enabling individuals to conquer procrastination and earn their leisure through daily planning, execution, and reflection.
 
 ## Features
 
 ### Functional
 
-- **Activity Tracking & Tagging**: Prompts users at configurable intervals to log activities with tags and productivity ratings. Productive actions earn wallet coins, while unproductive logs incur coin deductions.
-- **Flashcard Revision Manager**: Scans markdown directories for Q&A pairs and uses the Free Spaced Repetition Scheduler (FSRS) algorithm to optimize review intervals and long-term memory retention.
-- **Habit Tracking & Reminders**: Manages custom habits with daily heatmaps, schedule routines, startup missed-reminder catch-ups, completion rewards, and missed-day penalties.
-- **Pomodoro Timer Management**: Runs customizable focus and break countdown cycles with crash-proof state persistence. Earns virtual currency exclusively on completed work phases.
-- **Todo Task Management**: Enforces active task limits, sorts tasks by deadline urgency, restricts rescheduling to a single explicit confirmation, and computes proactiveness scores.
-- **Shop, Inventory & Economy**: Enables purchasing custom real-life reward items with wallet coins, banking partial unused reward time, compounding duplicate item durations, enforcing minimum penalty-to-reward ratios, and declaring bankruptcy for negative balances.
-- **Multi-Platform Data Synchronization**: Reconciles state across devices via operational logs, Last-Write-Wins (LWW) conflict resolution, Hybrid Logical Clocks (HLC), and Backend-for-Frontend (BFF) payload tailoring.
+- **Goal-Oriented Task Management (Planning)**: Replaces soft todo lists with unyielding goal contracts decomposed into mandatory tasks. Enforces strict concurrent active goal limits to eliminate task hoarding without execution. Failing any single task deadline immediately triggers a fail-all cascade across the entire goal and deducts penalty coins. Active goals and tasks cannot be deleted or evaded once committed.
+- **Pomodoro Focus Timer (Execution)**: Runs customizable work and recovery countdown cycles (work time, short break, long break, and cycle intervals) with crash-proof local persistence.
+- **Activity Tracking & Tagging (Reflection)**: Prompts users at configurable intervals (15m, 30m, 45m, 60m) to reflect on and categorize their recent actions into productive and un productive with category tags.
+- **Habit Tracking & Routines (Reflection)**: Tracks daily habits with custom days-of-week cadences, individual calendar heatmaps, and startup missed-reminder catch-ups.
+- **Real-Life Reward Shop**: Enables users to create custom real-world incentives with designated coin prices and durations (e.g., "1 Hour Gaming = 100 coins"). Rewards are purchased strictly with earned wallet coins, establishing that leisure must be earned through hard labor.
+- **Inventory & Time Banking**: Purchased rewards sit in inventory as banked time assets. Users activate items in a dedicated countdown window, pause to bank unused minutes for later, and compound duplicate purchases additively into single combined durations.
+- **Discipline Economy & Bankruptcy**: Enforces a closed-loop economy without streaks or multipliers. Negative balances allow grinding out of debt or declaring voluntary bankruptcy. Hitting the -250 coin limit automatically enforces bankruptcy, incrementing the permanent bankruptcy count, resetting balance to zero, and liquidating all inventory assets.
+- **Event-Sourced HLC Synchronization**: Synchronizes state across platforms using Hybrid Logical Clocks (HLC) and immutable mutation event logs. Operates via a Git-like protocol (commit, push, pull, merge) using local and global tracking pointers without branches, transmitting only required incremental deltas.
 
 ### Non Functional
 
-- **Local-First Responsiveness**: All client user interfaces read from and write to local SQLite replicas first, guaranteeing sub-millisecond input response times.
-- **Privacy & Offline Independence**: Operates fully over local networks without sending personal activity or habit data to external cloud servers.
-- **Form-Factor Optimization**: Provides lightweight binary payloads and minimal footprint UI layers for resource-constrained Slint embedded devices while serving complete structural payloads to desktop and mobile clients.
-- **High Concurrency & Determinism**: Uses non-blocking asynchronous I/O on the host server and 100% deterministic pure domain core algorithms.
+- **Custom Semantic Reconciliation (No LWW)**: Rejects naive Last-Write-Wins (LWW) overwriting in favor of deterministic domain-specific convergence.
+- **Automated Snapshot Compaction & Time-Travel**: Triggers when the event log exceeds 5,000 entries, compressing the first 4,000 entries into a verified base state snapshot while retaining the latest 1,000 uncompressed logs for active peer reconciliation.
+- **Two-Tier Server Core (Go Relay + Rust Sidecar)**: Couples an external Go/Gin HTTP gateway for high-concurrency network streaming with an internal Rust rusqlite sidecar process over standard input/output pipes (stdpipe) using newline-delimited JSON. The Rust engine manages WAL-mode database persistence, multi-device tracking, and reconciliation.
+- **Standalone Offline Independence**: Every platform client functions with complete local autonomy, executing reads and writes directly against native local storage and zero server connection requirements.
+- **Minimalist 2D Duo-Chromatic User Interface**: Flat 2D visual design, provides Dark and Light themes with selectable accent color from seven options.
+- **Multi-Platform Form-Factor Optimization**: Delivers native client implementations tailored to each platform—reactive web interfaces via Svelte, desktop performance via React + Tauri, native mobile performance via Kotlin (Android), and low-footprint embedded binaries via Slint and Rust.
 
-## Specifications
+## Prerequisites
 
 ### Requirements
 
-- **Desktop Host Server**: Rust toolchain (cargo, rustc).
-- **Desktop Client Application**: Node.js, Next.js framework, and Tauri CLI.
-- **Mobile Client Application**: Kotlin Multiplatform (KMP) or Flutter SDK.
-- **Embedded Client Application**: Rust toolchain with Slint UI toolkit support.
-- **Storage Engine**: SQLite database engine with Write-Ahead Logging (WAL) support.
+To compile and build Zennify from source on your local system:
+
+- **Web Client (Svelte)**: Node.js (LTS version 18 or higher) and package manager (`npm`, `pnpm`, or `yarn`).
+- **Desktop Client (React + Tauri)**: Node.js, stable Rust toolchain (`rustc`, `cargo`), Tauri CLI (`@tauri-apps/cli`), and platform C/C++ compilers (`gcc`, `clang`, or MSVC Build Tools).
+- **Mobile Client (Kotlin)**: Android SDK, Android NDK, JDK 17+, and a configured Gradle build environment.
+- **Embedded Client (Slint)**: Stable Rust toolchain (2021 edition) and Slint GUI toolkit system dependencies.
+- **Synchronization Server (Go + Rust)**: Go toolchain (version 1.21 or higher) for the Gin gateway and Rust toolchain for the internal rusqlite sidecar engine.
+- **Linux Development Headers**: Development packages for `libwebkit2gtk-4.1-dev` (or `4.0`), `libssl-dev`, and `libayatana-appindicator3-dev`.
 
 ### Dependencies
 
-- **Web & Server Runtime**: Axum, Tokio async runtime.
-- **Data Persistence**: SQLite (via sqlx / r2d2).
-- **Serialization & Protocols**: Serde, Serde JSON, Bincode / Postcard, LZ4 compression.
-- **Domain Algorithms**: FSRS algorithm engine, Hybrid Logical Clock (HLC) tick generator.
+To run and use Zennify directly without building from source:
+
+- **Web Browser**: Any modern evergreen web browser supporting standard Web APIs and client storage (Chrome, Firefox, Safari, Edge).
+- **Desktop Environment**: Windows 10/11 (64-bit with Microsoft Edge WebView2 Evergreen Runtime) or modern Linux distributions with WebKit2GTK runtime libraries.
+- **Mobile Environment**: Android device running Android 8.0 (Oreo / API Level 26) or higher.
+- **Embedded Hardware**: Microcontroller or single-board computer running embedded Linux compatible with the Slint GUI runtime.
+- **Optional Sync Server Runtime**: Local loopback or network interface with standard process pipe (`stdpipe`) execution permissions.
+- **Filesystem Permissions**: Standard user-level read and write filesystem permissions for local database files and append-only event logs.
 
 ## Getting Started
 
-Installation and usage guidelines are documented in [`docs/begin.md`](./docs/begin.md).
+Installation and Usage Guidelines are inside the docs/begin.md.

@@ -1,7 +1,7 @@
 ---
 name: Infrastructure Proposal
 about: Propose or update low-level components, core architecture, database schemas, pipelines, or deployment setups.
-title: "[INFRA]: "
+title: "[INFRA]: <Brief Title>"
 labels: ["infrastructure"]
 ---
 

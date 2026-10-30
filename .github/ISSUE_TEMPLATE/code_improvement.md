@@ -1,7 +1,7 @@
 ---
 name: Code Improvement
 about: Track refactoring, reengineering, or general code enhancements.
-title: "[IMPROVEMENT]: "
+title: "[IMPROVEMENT]: <Brief Title>"
 labels: ["improvement"]
 ---
 

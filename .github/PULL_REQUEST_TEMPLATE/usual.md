@@ -1,6 +1,6 @@
 ### Context
-- **Type:** [ ] Defect | [ ] Infra | [ ] Feature | [ ] Improvement | [ ] Docs
- **Issue:** Fixes #<!-- Paste Issue Number here (e.g., #104) -->
+- **Type:** [ ] Defect | [] Infra | [ ] Feature | [ ] Improvement | [ ] Docs
+- **Issue:** Fixes #<!-- Paste Issue Number here (e.g., #104) -->
 - **Link:** <!-- Paste full issue URL here -->
 
 ### Description

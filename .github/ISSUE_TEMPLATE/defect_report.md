@@ -1,7 +1,7 @@
 ---
 name: Defect Report
 about: Report a bug or error found in the system.
-title: "[DEFECT]: "
+title: "[DEFECT]: <Brief Title>"
 labels: ["defect"]
 ---
 
